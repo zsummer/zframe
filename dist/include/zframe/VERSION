@@ -1,0 +1,6 @@
+version:
+last_sha1(./src)=49ccb25954e05e6dd4f0f62270149c8748517aff
+last_date(./src)=2023-06-26 21:01:39 +0800
+
+git log -1 --stat ./src:
+commit 49ccb25954e05e6dd4f0f62270149c8748517aff Author: zsummer <yawei.zhang@foxmail.com> Date: Mon Jun 26 21:01:39 2023 +0800 base frame src/include/base_frame.h | 63 +++++++++ src/include/boot_frame.h | 328 +++++++++++++++++++++++++++++++++++++++++++++++ 2 files changed, 391 insertions(+)
