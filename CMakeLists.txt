@@ -1,5 +1,5 @@
 #cmake_minimum_required(VERSION 3.8)
-#project(zbase)
+#project(zframe)
 #enable_language(ASM)
 
 #from github.com/zsummer
@@ -44,7 +44,7 @@
 
 
 cmake_minimum_required(VERSION 3.8)
-project(zbase)
+project(zframe)
 
 include (${PROJECT_SOURCE_DIR}/cmake/macro.cmake)
 include (${PROJECT_SOURCE_DIR}/cmake/option.cmake)
@@ -81,7 +81,12 @@ auto_include_from_source(src_files)
 add_custom_target(${PROJECT_NAME} SOURCES  ${src_files} )
 
 
+auto_custom_target_sub_dir(${CMAKE_SOURCE_DIR}/vender "vender")
 
+
+auto_link_sub_lib_dir(${CMAKE_SOURCE_DIR}/vender "")
+auto_include_sub_hpp_dir(${CMAKE_SOURCE_DIR}/vender)
+auto_group_sub_cpp_dir(${CMAKE_SOURCE_DIR}/vender)
 
 
 # tests  
