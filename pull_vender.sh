@@ -6,13 +6,40 @@ export LC_ALL=C
 cd $(dirname "$0")
 
 
-cp src/include/* ./dist/include/zbase/
 
-cp README.md ./dist/include/zbase/
-cp LICENSE ./dist/include/zbase/
+echo $zbase_token
 
-version=`date +"release fn-log version date:%Y-%m-%d %H:%M:%S"`
-echo $version > ./dist/include/zbase/VERSION 
-echo "" >> ./dist/include/zbase/VERSION 
-echo "git log:" >> ./dist/include/zbase/VERSION 
-git log -1 --stat >> ./dist/include/zbase/VERSION 
+if [ "$zbase_token" != "" ]; then
+	zbase_token=$zbase_token@
+fi
+
+
+
+git checkout 
+
+if [ ! -d "./vender/zbase" ]; then
+	git subtree add --prefix=vender/zbase --squash  https://${zbase_token}github.com/zsummer/zbase.git dist
+fi
+
+git subtree pull -q --prefix=vender/zbase --squash  https://${zbase_token}github.com/zsummer/zbase.git dist
+
+
+if [ ! -d "./vender/fn-log" ]; then
+	git subtree add --prefix=vender/fn-log --squash  https://github.com/zsummer/fn-log.git dist
+fi
+
+git subtree pull -q --prefix=vender/fn-log --squash  https://github.com/zsummer/fn-log.git dist
+
+if [ ! -d "./vender/zprof" ]; then
+	git subtree add --prefix=vender/zprof --squash  https://github.com/zsummer/zprof.git dist
+fi
+
+git subtree pull -q --prefix=vender/zprof --squash  https://github.com/zsummer/zprof.git dist
+
+
+
+
+
+
+
+
