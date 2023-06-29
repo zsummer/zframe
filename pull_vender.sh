@@ -31,10 +31,10 @@ fi
 git subtree pull -q --prefix=vender/fn-log --squash  https://github.com/zsummer/fn-log.git dist
 
 if [ ! -d "./vender/zprof" ]; then
-	git subtree add --prefix=vender/zprof --squash  https://github.com/zsummer/zprof.git dist
+	git subtree add --prefix=vender/zprof --squash  https://${zbase_token}github.com/zsummer/zprof.git dist
 fi
 
-git subtree pull -q --prefix=vender/zprof --squash  https://github.com/zsummer/zprof.git dist
+git subtree pull -q --prefix=vender/zprof --squash  https://${zbase_token}github.com/zsummer/zprof.git dist
 
 
 
