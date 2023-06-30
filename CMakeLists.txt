@@ -73,28 +73,25 @@ else()
 endif(OPEN_CHECK)
 
 
+file(GLOB_RECURSE vender_files ${CMAKE_SOURCE_DIR}/vender/*.h ${CMAKE_SOURCE_DIR}/vender/*.cpp)
+auto_group_sub_dir(${CMAKE_SOURCE_DIR}/vender)
+auto_custom_target_sub_dir("vender" ${CMAKE_SOURCE_DIR}/vender )
 
 
-file(GLOB_RECURSE src_files ${CMAKE_SOURCE_DIR}/src/include/*.h)
-auto_group_source(src_files)
-auto_include_from_source(src_files)
-add_custom_target(${PROJECT_NAME} SOURCES  ${src_files} )
+
+file(GLOB_RECURSE src_files ${CMAKE_SOURCE_DIR}/src/*.h ${CMAKE_SOURCE_DIR}/src/*.cpp)
+auto_group_files(src_files)
+auto_custom_target_sub_dir(${PROJECT_NAME} ${CMAKE_SOURCE_DIR}/src )
 
 
-auto_custom_target_sub_dir(${CMAKE_SOURCE_DIR}/vender "vender")
 
 
-auto_link_sub_lib_dir(${CMAKE_SOURCE_DIR}/vender "")
-auto_include_sub_hpp_dir(${CMAKE_SOURCE_DIR}/vender)
-auto_group_sub_cpp_dir(${CMAKE_SOURCE_DIR}/vender)
+
+
+
 
 
 # tests  
-include_directories(${CMAKE_SOURCE_DIR}/tests)
-include_directories(${CMAKE_SOURCE_DIR}/tests/common)
-auto_include_sub_hpp_dir(${CMAKE_SOURCE_DIR}/tests/common)
-auto_group_sub_cpp_dir(${CMAKE_SOURCE_DIR}/tests/common)
-
 
 get_sub_dir_name(sub_dirs ${CMAKE_SOURCE_DIR}/tests/)
 foreach(sub_dir_name ${sub_dirs}) 
@@ -102,15 +99,23 @@ foreach(sub_dir_name ${sub_dirs})
     if (${sub_dir_name} STREQUAL "common") 
         continue()
     endif()
+
+    message("" )
+    message("tests::" ${sub_dirs} " build:")
+
     file(GLOB_RECURSE test_sources
     ${CMAKE_SOURCE_DIR}/tests/common/*.h 
     ${CMAKE_SOURCE_DIR}/tests/common/*.cpp 
     ${CMAKE_SOURCE_DIR}/tests/${sub_dir_name}/*.h 
     ${CMAKE_SOURCE_DIR}/tests/${sub_dir_name}/*.cpp)
 
+    auto_group_files(vender_files)
+    auto_group_files(src_files)
+    auto_group_files(test_sources)
 
-    auto_group_source(test_sources)
-    add_executable(${sub_dir_name}  ${test_sources})
+
+
+    add_executable(${sub_dir_name}  ${test_sources} ${src_files} ${vender_files})
     if (UNIX)
             #set_target_properties(${sub_dir_name} PROPERTIES COMPILE_FLAGS "" LINK_FLAGS "-ldl")
     else()
@@ -119,7 +124,13 @@ foreach(sub_dir_name ${sub_dirs})
         endif()
     endif()
 
-    add_dependencies(${sub_dir_name} ${PROJECT_NAME})
+
+
+    auto_target_include_files(${sub_dir_name} vender_files)
+    auto_target_include_files(${sub_dir_name} src_files)
+    auto_target_include_files(${sub_dir_name} test_sources)
+
+
 endforeach()
 
 
