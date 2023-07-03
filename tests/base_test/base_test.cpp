@@ -16,7 +16,7 @@
 */
 
 
-#include "base_frame.h"
+#include "frame_def.h"
 #include "boot_frame.h"
 #include "test_common.h"
 #include "ztest.h"

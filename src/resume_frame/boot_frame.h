@@ -1,73 +1,34 @@
+
 /*
-* boot_frame License
 * Copyright (C) 2019 YaweiZhang <yawei.zhang@foxmail.com>.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+* All rights reserved
+* This file is part of the zframe, used MIT License.
 */
 
 
 #ifndef  _BOOT_FRAME_H_
 #define _BOOT_FRAME_H_
 
-
-#ifndef ZBASE_SHORT_TYPE
-#define ZBASE_SHORT_TYPE
-using s8 = char;
-using u8 = unsigned char;
-using s16 = short int;
-using u16 = unsigned short int;
-using s32 = int;
-using u32 = unsigned int;
-using s64 = long long;
-using u64 = unsigned long long;
-using f32 = float;
-using f64 = double;
-#endif
-
-#if __GNUG__
-#define ZBASE_ALIAS __attribute__((__may_alias__))
-#else
-#define ZBASE_ALIAS
-#endif
-
-#include "fn_log.h"
-#include "zprof.h"
-#include "zshm_loader.h"
-#include <memory>
-#include <zarray.h>
-#include "zshm_boot.h"
-#include "zbuddy.h"
-#include "zmalloc.h"
-#include "zshm_ptr.h"
+#include "frame_def.h"
+#include "base_frame.h"
 
 
-using shm_header = zarray<u32, 100>;
+
 
 static constexpr u32 kPageOrder = 20; //1m  
-static constexpr u32 kDynSpaceOrder = 8; // 8:256,  10:1024  
+static constexpr u32 kHeapSpaceOrder = 8; // 8:256,  10:1024  
 
 #define SPACE_ALIGN(bytes) zmalloc_align_value(bytes, 16)
 
+
 enum  ShmSpace : u32
 {
-    kFrame = 0,
+    kMainFrame = 0,
     kObjectPool,
     kBuddy,
     kMalloc,
-    kDyn,
+    kHeap,
 };
-
-
 
 
 
@@ -81,7 +42,7 @@ public:
 public:
     static Frame& Instance()
     {
-        return *space<Frame, ShmSpace::kFrame>();
+        return *space<Frame, ShmSpace::kMainFrame>();
     }
 
     static inline char*& ShmInstance()
@@ -121,12 +82,12 @@ private:
         bytes += zbuddy_shift_size(kPageOrder) - 1;
         u32 pages = (u32)(bytes >> kPageOrder);
         u64 page_index = space<zbuddy, ShmSpace::kBuddy>()->alloc_page(pages);
-        void* addr = space<char, ShmSpace::kDyn>() + (page_index << kPageOrder);
+        void* addr = space<char, ShmSpace::kHeap>() + (page_index << kPageOrder);
         return addr;
     }
     static inline u64 FreeLarge(void* addr, u64 bytes)
     {
-        u64 offset = (char*)addr - space<char, ShmSpace::kDyn>();
+        u64 offset = (char*)addr - space<char, ShmSpace::kHeap>();
         u32 page_index = (u32)(offset >> kPageOrder);
         u32 pages = space<zbuddy, ShmSpace::kBuddy>()->free_page(page_index);
         u64 free_bytes = pages << kPageOrder;
@@ -161,10 +122,10 @@ s32 FrameDelegate<Frame>::InitSpaceFromConfig(zshm_space_entry& params, bool isU
     params.space_addr_ = 0x0000700000000000ULL;
 #endif // WIN32
 
-    params.spaces_[ShmSpace::kFrame].size_ = SPACE_ALIGN(sizeof(Frame));
-    params.spaces_[ShmSpace::kBuddy].size_ = SPACE_ALIGN(zbuddy::zbuddy_size(kDynSpaceOrder));
+    params.spaces_[ShmSpace::kMainFrame].size_ = SPACE_ALIGN(sizeof(Frame));
+    params.spaces_[ShmSpace::kBuddy].size_ = SPACE_ALIGN(zbuddy::zbuddy_size(kHeapSpaceOrder));
     params.spaces_[ShmSpace::kMalloc].size_ = SPACE_ALIGN(zmalloc::zmalloc_size());
-    params.spaces_[ShmSpace::kDyn].size_ = SPACE_ALIGN(zbuddy_shift_size(kDynSpaceOrder + kPageOrder));
+    params.spaces_[ShmSpace::kHeap].size_ = SPACE_ALIGN(zbuddy_shift_size(kHeapSpaceOrder + kPageOrder));
 
     params.whole_space_.size_ += SPACE_ALIGN(sizeof(params));
     for (u32 i = 0; i < ZSHM_MAX_SPACES; i++)
@@ -195,11 +156,11 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
 
     SpaceEntry().space_addr_ = (u64)shm_space;
 
-    BuildObject<Frame>(space<Frame, ShmSpace::kFrame>());
+    BuildObject<Frame>(space<Frame, ShmSpace::kMainFrame>());
     zbuddy* buddy_ptr = space<zbuddy, ShmSpace::kBuddy>();
     memset(buddy_ptr, 0, params.spaces_[ShmSpace::kBuddy].size_);
     buddy_ptr->set_global(buddy_ptr);
-    zbuddy::build_zbuddy(buddy_ptr, params.spaces_[ShmSpace::kBuddy].size_, kDynSpaceOrder, &ret);
+    zbuddy::build_zbuddy(buddy_ptr, params.spaces_[ShmSpace::kBuddy].size_, kHeapSpaceOrder, &ret);
     if (ret != 0)
     {
         LogError() << "";
@@ -213,7 +174,7 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
     malloc_ptr->check_health();
 
 
-    ret = space<Frame, ShmSpace::kFrame>()->Start();
+    ret = space<Frame, ShmSpace::kMainFrame>()->Start();
     if (ret != 0)
     {
         LogError() << "";
@@ -241,13 +202,13 @@ s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
     ShmInstance() = (char*)shm_space;
 
     SpaceEntry().space_addr_ = (u64)shm_space;
-    Frame* m = space<Frame, ShmSpace::kFrame>();
+    Frame* m = space<Frame, ShmSpace::kMainFrame>();
     RebuildVPTR<Frame>(m);
 
 
     zbuddy* buddy_ptr = space<zbuddy, ShmSpace::kBuddy>();
     buddy_ptr->set_global(buddy_ptr);
-    zbuddy::rebuild_zbuddy(buddy_ptr, params.spaces_[ShmSpace::kBuddy].size_, kDynSpaceOrder, &ret);
+    zbuddy::rebuild_zbuddy(buddy_ptr, params.spaces_[ShmSpace::kBuddy].size_, kHeapSpaceOrder, &ret);
     if (ret != 0)
     {
         LogError() << "";
@@ -259,7 +220,7 @@ s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
     malloc_ptr->set_block_callback(&AllocLarge, &FreeLarge);
     malloc_ptr->check_health();
 
-    ret = space<Frame, ShmSpace::kFrame>()->Resume();
+    ret = space<Frame, ShmSpace::kMainFrame>()->Resume();
     if (ret != 0)
     {
         LogError() << "";
@@ -325,7 +286,7 @@ s32 FrameDelegate<Frame>::DestroyShm(bool isUseHeap, bool self, bool force)
 
     if (!force)
     {
-        DestroyObject(space<Frame, ShmSpace::kFrame>());
+        DestroyObject(space<Frame, ShmSpace::kMainFrame>());
     }
 
     ret = zshm_boot::destroy_frame(SpaceEntry());
