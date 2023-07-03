@@ -11,7 +11,7 @@
 
 #include "frame_def.h"
 #include "base_frame.h"
-
+#include "object_pool_helper.h"
 
 
 
@@ -24,7 +24,7 @@ static constexpr u32 kHeapSpaceOrder = 8; // 8:256,  10:1024
 enum  ShmSpace : u32
 {
     kMainFrame = 0,
-    kObjectPool,
+    kPool,
     kBuddy,
     kMalloc,
     kHeap,
@@ -104,9 +104,11 @@ public:
     static inline s32 HoldShm(bool isUseHeap);
     static inline s32 DestroyShm(bool isUseHeap, bool self, bool force);
 private:
-
+    static ObjectPoolHelper helper_;
 };
 
+template <class Frame>
+ObjectPoolHelper FrameDelegate<Frame>::helper_;
 
 template <class Frame>  
 s32 FrameDelegate<Frame>::InitSpaceFromConfig(zshm_space_entry& params, bool isUseHeap)
@@ -122,7 +124,15 @@ s32 FrameDelegate<Frame>::InitSpaceFromConfig(zshm_space_entry& params, bool isU
     params.space_addr_ = 0x0000700000000000ULL;
 #endif // WIN32
 
+    s32 ret = helper_.AddPool(23, 10, 100, "test");
+    if (ret != 0)
+    {
+        return ret;
+    }
+
+
     params.spaces_[ShmSpace::kMainFrame].size_ = SPACE_ALIGN(sizeof(Frame));
+    params.spaces_[ShmSpace::kPool].size_ = kPoolHeadSize + helper_.TotalSpaceSize();
     params.spaces_[ShmSpace::kBuddy].size_ = SPACE_ALIGN(zbuddy::zbuddy_size(kHeapSpaceOrder));
     params.spaces_[ShmSpace::kMalloc].size_ = SPACE_ALIGN(zmalloc::zmalloc_size());
     params.spaces_[ShmSpace::kHeap].size_ = SPACE_ALIGN(zbuddy_shift_size(kHeapSpaceOrder + kPageOrder));
@@ -157,6 +167,34 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
     SpaceEntry().space_addr_ = (u64)shm_space;
 
     BuildObject<Frame>(space<Frame, ShmSpace::kMainFrame>());
+
+    ObjectPoolHead* pool_head = space<ObjectPoolHead, ShmSpace::kPool>();
+    memcpy(pool_head, helper_.head(), kPoolHeadSize);
+    pool_head->symbols_.attach(pool_head->object_names_, kLimitObjectNameBuffSize, kLimitObjectNameBuffSize); //rebuild symbols   
+    char* pool_addr = (char*)pool_head + kPoolHeadSize;
+
+    for (s32 i = 0; i <= pool_head->pool_max_used_id_; i++)
+    {
+        if (pool_head->pools_[i].space_size_ == 0)
+        {
+            continue;
+        }
+        //rebuild bitesets in real space   
+        pool_head->bitsets_[i].attach((u64*)pool_addr, pool_head->bitsets_[i].array_size(), true);
+        pool_addr += pool_head->bitsets_[i].array_size() * zbitset::kByteSize;
+        //rebuild pool in real space  
+        zmem_pool& pool = pool_head->pools_[i];
+        s32 ret = pool.init(pool.user_size_, pool.user_name_, pool.chunk_count_, pool_addr, pool.space_size_);
+        if (ret != 0)
+        {
+            LogError() << "";
+            return ret;
+        }
+        pool_addr += pool.space_size_;
+        LogDebug() << "init object[" << pool_head->symbols_.at(pool.user_name_) << "] size:" << pool.user_size_ << ", count:" << pool.chunk_count_;
+    }
+
+
     zbuddy* buddy_ptr = space<zbuddy, ShmSpace::kBuddy>();
     memset(buddy_ptr, 0, params.spaces_[ShmSpace::kBuddy].size_);
     buddy_ptr->set_global(buddy_ptr);
@@ -205,6 +243,20 @@ s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
     Frame* m = space<Frame, ShmSpace::kMainFrame>();
     RebuildVPTR<Frame>(m);
 
+
+    ObjectPoolHead* pool_head = space<ObjectPoolHead, ShmSpace::kPool>();
+    if (helper_.CheckVersion(pool_head) != 0)
+    {
+        LogError() << "";
+        return ret;
+    }
+
+    for (s32 i = 0; i <= pool_head->pool_max_used_id_; i++)
+    {
+        //resume object vptr
+        zmem_pool& pool = pool_head->pools_[i];
+        LogDebug() << "resume object[" << pool_head->symbols_.at(pool.user_name_) << "] size:" << pool.user_size_ << ", count:" << pool.chunk_count_;
+    }
 
     zbuddy* buddy_ptr = space<zbuddy, ShmSpace::kBuddy>();
     buddy_ptr->set_global(buddy_ptr);

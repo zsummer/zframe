@@ -10,7 +10,7 @@
 #define _OBJECT_POOL_FRAME_H_
 
 #include "frame_def.h"
-
+#include "object_pool_helper.h"
 
 
 
@@ -18,7 +18,6 @@
 
 #define SPACE_ALIGN(bytes) zmalloc_align_value(bytes, 16)
 
-constexpr static s32 kLimitObjectCount = 100;
 
 class ObjectPoolFrame
 {
