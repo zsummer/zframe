@@ -17,25 +17,6 @@
 template <class Frame>  //derive from BaseFrame  
 class FrameDelegate
 {
-private:
-    static_assert(std::is_base_of<BaseFrame, Frame>::value, "");
-    static inline char*& ShmBaseSpace()
-    {
-        static char* g_shm_space = nullptr;
-        return g_shm_space;
-    }
-    static inline zshm_space& ShmSpace()
-    {
-        return *(zshm_space*)(ShmBaseSpace());
-    }
-
-public:
-
-    template <class T, u32 ID>
-    static inline T* SubSpace()
-    {
-        return (T*)(ShmBaseSpace() + ShmSpace().subs_[ID].offset_);
-    }
 
 
 private:
@@ -86,6 +67,7 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
     s32 ret = Frame().Config(conf);
     if (ret != 0)
     {
+        LogError();
         return ret;
     }
 
@@ -99,7 +81,7 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
             LogError() << "build_frame error. shm_space:" << (void*)shm_space << ", ret:" << zshm_errno::str(ret);
             return ret;
         }
-        ShmBaseSpace() = (char*)shm_space;
+        g_shm_space = shm_space;
         ShmSpace().fixed_ = (u64)shm_space;
     }
 
@@ -118,7 +100,7 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
 
         for (s32 i = 0; i <= space->max_used_id_; i++)
         {
-            if (space->pools_[i].obj_count_ == 0)
+            if (space->conf_[i].obj_count_ == 0)
             {
                 continue;
             }
@@ -135,8 +117,9 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
             LogDebug() << "build pool " << space->symbols_.at(pool.name_id_) << ":" << pool;
         }
 
-        if (offset >= ShmSpace().subs_[kPool].size_)
+        if (offset > ShmSpace().subs_[kPool].size_)
         {
+            LogError();
             return -2;
         }
     }
@@ -193,10 +176,10 @@ s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
         ret = booter.resume_frame(conf.space_conf_, shm_space);
         if (ret != 0 || shm_space == nullptr)
         {
-            LogError() << "booter.resume_frame error. shm_space:" << (void*)shm_space << ", ret:" << ret;
+            LogError() << "booter.resume_frame error. shm_space:" << (void*)shm_space << ", ret:" << zshm_errno::str(ret);
             return ret;
         }
-        ShmBaseSpace() = (char*)shm_space;
+        g_shm_space = shm_space;
         ShmSpace().fixed_ = (u64)shm_space;
     }
 
@@ -229,7 +212,7 @@ s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
             {
                 continue;
             }
-            LogDebug() << "resuming pool " << space->symbols_.at(pool.name_id_) << pool;
+            LogDebug() << "has pool " << space->symbols_.at(pool.name_id_) << pool;
         }
     }
 
@@ -297,7 +280,7 @@ s32 FrameDelegate<Frame>::HoldShm(bool isUseHeap)
         LogError() << "";
         return ret;
     }
-    ShmBaseSpace() = (char*)shm_space;
+    g_shm_space = shm_space;
     return 0;
 }
 
@@ -329,7 +312,7 @@ s32 FrameDelegate<Frame>::DestroyShm(bool isUseHeap, bool self, bool force)
         }
     }
 
-    if (ShmBaseSpace() == nullptr)
+    if (g_shm_space == nullptr)
     {
         LogError() << "";
         return -1;

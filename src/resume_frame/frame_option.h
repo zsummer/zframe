@@ -65,11 +65,31 @@ constexpr static s64 kPoolSpaceHeadSize = sizeof(PoolSpace);
 
 
 
+
 struct FrameConf
 {
     zshm_space space_conf_;
     PoolSpace pool_conf_;
 };
+
+
+
+extern zshm_space* g_shm_space;
+
+static inline zshm_space& ShmSpace()
+{
+    return *g_shm_space;
+}
+
+
+
+
+template <class T, u32 ID>
+static inline T* SubSpace()
+{
+    return (T*)((char*)g_shm_space + ShmSpace().subs_[ID].offset_);
+}
+
 
 
 #endif

@@ -81,6 +81,7 @@ using f64 = double;
 #include "zshm_boot.h"
 
 #include "zmem_pool.h"
+#include "zforeach.h"
 #include "zsymbols.h"
 #include "zclock.h"
 
