@@ -43,7 +43,7 @@
 # execute_process
 
 
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.10)
 project(zframe)
 
 include (${PROJECT_SOURCE_DIR}/cmake/macro.cmake)
@@ -84,6 +84,11 @@ auto_group_files(src_files)
 auto_custom_target_sub_dir(${PROJECT_NAME} ${CMAKE_SOURCE_DIR}/src )
 
 
+if(UNIX)
+    auto_include_sub_dir(${CMAKE_SOURCE_DIR}/vender)
+    auto_include_sub_dir(${CMAKE_SOURCE_DIR}/src)
+    auto_include_sub_dir(${CMAKE_SOURCE_DIR}/tests/common)
+endif()
 
 
 
@@ -113,9 +118,15 @@ foreach(sub_dir_name ${sub_dirs})
     auto_group_files(src_files)
     auto_group_files(test_sources)
 
+    #message(${src_files})
+
+
+
+
 
 
     add_executable(${sub_dir_name}  ${test_sources} ${src_files} ${vender_files})
+
     if (UNIX)
             #set_target_properties(${sub_dir_name} PROPERTIES COMPILE_FLAGS "" LINK_FLAGS "-ldl")
     else()
@@ -123,12 +134,11 @@ foreach(sub_dir_name ${sub_dirs})
             set_target_properties(${sub_dir_name} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
         endif()
     endif()
-
-
-
     auto_target_include_files(${sub_dir_name} vender_files)
     auto_target_include_files(${sub_dir_name} src_files)
     auto_target_include_files(${sub_dir_name} test_sources)
+    target_precompile_headers(${sub_dir_name} PUBLIC  ${CMAKE_SOURCE_DIR}/src/resume_frame/frame_def.h)
+
 
 
 endforeach()

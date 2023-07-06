@@ -6,12 +6,10 @@
 */
 
 
-#ifndef _FRAME_OPTION_H_
-#define _FRAME_OPTION_H_
+#ifndef FRAME_OPTION_H_
+#define FRAME_OPTION_H_
 #include "frame_def.h"
-#include "zsymbols.h"
-#include "zmem_pool.h"
-#include "zsymbols.h"
+
 
 
 //公共定制类常量尽量放在局部def/option中   

@@ -6,8 +6,8 @@
 */
 
 
-#ifndef  _BOOT_FRAME_H_
-#define _BOOT_FRAME_H_
+#ifndef  BOOT_FRAME_H_
+#define BOOT_FRAME_H_
 
 #include "frame_def.h"
 #include "base_frame.h"
@@ -30,10 +30,6 @@ private:
     }
 
 public:
-    static Frame& Instance()
-    {
-        return *SubSpace<Frame, ShmSpace::kMainFrame>();
-    }
 
     template <class T, u32 ID>
     static inline T* SubSpace()
@@ -75,6 +71,7 @@ private:
 public:
     static inline s32 BuildShm(bool isUseHeap);
     static inline s32 ResumeShm(bool isUseHeap);
+    static inline s32 DoTick(s64 now_ms);
     static inline s32 HoldShm(bool isUseHeap);
     static inline s32 DestroyShm(bool isUseHeap, bool self, bool force);
 };
@@ -266,6 +263,17 @@ s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
     }
     return 0;
 }
+
+
+template <class Frame>
+s32 FrameDelegate<Frame>::DoTick(s64 now_ms)
+{
+    return SubSpace<Frame, kMainFrame>()->Tick(now_ms);
+}
+
+
+
+
 template <class Frame>
 s32 FrameDelegate<Frame>::HoldShm(bool isUseHeap)
 {

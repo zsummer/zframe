@@ -6,10 +6,10 @@
 */
 
 
-#ifndef  _BASE_FRAME_H_
-#define _BASE_FRAME_H_
+#ifndef  BASE_FRAME_H_
+#define BASE_FRAME_H_
 #include "frame_option.h"
-#include "object_pool_frame.h"
+#include "pool_helper.h"
 
 
 
@@ -68,6 +68,9 @@ public:
     {
         return 0;
     }
+
+    virtual s32 Tick(s64 now_ms) = 0;
+
 
 private:
 

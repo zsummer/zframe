@@ -5,8 +5,8 @@
 * This file is part of the zframe, used MIT License.
 */
 
-#ifndef _FRAME_DEF_H_
-#define _FRAME_DEF_H_
+#ifndef FRAME_DEF_H_
+#define FRAME_DEF_H_
 
 
 #ifndef ZBASE_SHORT_TYPE
@@ -81,6 +81,9 @@ using f64 = double;
 #include "zshm_boot.h"
 
 #include "zmem_pool.h"
+#include "zsymbols.h"
+#include "zclock.h"
+
 
 inline FNLog::LogStream& operator <<(FNLog::LogStream& ls, zmem_pool& pool)
 {

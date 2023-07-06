@@ -6,8 +6,8 @@
 */
 
 
-#ifndef _OBJECT_POOL_HELPER_H_
-#define _OBJECT_POOL_HELPER_H_
+#ifndef POOL_HELPER_H_
+#define POOL_HELPER_H_
 
 #include "frame_def.h"
 #include "frame_option.h"
@@ -87,7 +87,7 @@ public:
             name = zsymbols::readable_class_name<_Ty>();
         }
         s32 obj_size = (s32)sizeof(_Ty);
-        s32 ret = AddPool(pool_id, obj_size, obj_count, name);
+        s32 ret = Add(pool_id, obj_size, obj_count, name);
         if (ret != 0)
         {
             return ret;

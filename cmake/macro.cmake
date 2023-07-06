@@ -100,7 +100,7 @@ function(auto_target_include_files target src_file_list)
 
     foreach(dir_path ${dir_paths})
         message("auto_target_include_files::auto target: " ${target} " include:" ${dir_path})
-        target_include_directories(${target} PRIVATE ${dir_path})
+        target_include_directories(${target} PUBLIC ${dir_path})
     endforeach()
 endfunction()
 
