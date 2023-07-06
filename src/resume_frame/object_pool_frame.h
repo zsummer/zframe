@@ -24,10 +24,10 @@ class ObjectPoolFrame
 public:
     static ObjectPoolFrame& Instance()
     {
-        return *ObjectPoolFrame::ShmInstance();
+        return *ObjectPoolFrame::ShmBaseSpace();
     }
 
-    static inline ObjectPoolFrame*& ShmInstance()
+    static inline ObjectPoolFrame*& ShmBaseSpace()
     {
         static ObjectPoolFrame* g_instance_ptr = nullptr;
         return g_instance_ptr;

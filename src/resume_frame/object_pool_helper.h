@@ -10,95 +10,71 @@
 #define _OBJECT_POOL_HELPER_H_
 
 #include "frame_def.h"
-#include "zmem_pool.h"
-#include "zsymbols.h"
-#include "zbitset.h"
+#include "frame_option.h"
 
-constexpr static s32 kLimitObjectCount = 100;
-constexpr static s32 kLimitObjectNameBuffSize = kLimitObjectCount * 30;
-
-
-struct ObjectPoolVersion
+class PoolHelper
 {
-    s32 obj_size_;
-    s32 obj_count_;
-    s32 obj_name_;
-};
-
-
-struct ObjectPoolHead
-{
-    //used check versions  
-    s32 pool_max_used_id_;
-    ObjectPoolVersion versions_[kLimitObjectCount];
-    char object_names_[kLimitObjectNameBuffSize];
-    
-    //runtime states
-    zmem_pool pools_[kLimitObjectCount];
-    zbitset bitsets_[kLimitObjectCount];
-    zsymbols symbols_;
-};
-
-
-constexpr static s64 kPoolHeadSize = sizeof(ObjectPoolHead);
-
-
-class ObjectPoolHelper
-{
+private:
+    PoolSpace* space_ = nullptr;
 public:
-    ObjectPoolHelper()
+
+    s32 Attach(PoolSpace& space, bool reset)
     {
-        head_ = new ObjectPoolHead();
-        memset(head_, 0, sizeof(ObjectPoolHead));
-        symbols_.attach(head_->object_names_, kLimitObjectNameBuffSize, 0);
-    }
-    ~ObjectPoolHelper()
-    {
-        delete head_;
+        space_ = &space;
+        if (space_ != nullptr && reset)
+        {
+            memset(space_, 0, sizeof(space));
+        }
+
+        s32 ret = space_->symbols_.attach(space_->names_, kLimitObjectNameBuffSize, space_->symbols_.exploit_);
+        if (ret != 0)
+        {
+            return ret;
+        }
+        return 0;
     }
 
-    ObjectPoolHead* head() const { return head_; }
+    PoolSpace* space() const { return space_; }
 
-    s32 AddPool(s32 pool_id, s32 obj_size, s32 obj_count, const std::string& name)
+    s32 Add(s32 pool_id, s32 obj_size, s32 obj_count, const std::string& name)
     {
         if (pool_id < 0 || pool_id >= kLimitObjectCount)
         {
             //invalid param
             return -1;
         }
-        
-        zmem_pool& pool = head_->pools_[pool_id];
-        zbitset& bitset = head_->bitsets_[pool_id];
-        if (pool.chunk_size() > 0)
+        if (space_ == nullptr)
         {
-            //aready init  
             return -2;
         }
-        s32 name_id = symbols_.add(name.c_str(), (s32)name.length(), false);
-        if (name_id == zsymbols::invalid_symbols_id)
+
+        PoolConf& conf = space_->conf_[pool_id];
+        if (conf.obj_count_ > 0)
+        {
+            return -2;
+        }
+        s32 name_id = space_->symbols_.add(name.c_str(), (s32)name.length(), false);
+        if (name_id == zsymbols::INVALID_SYMBOLS_ID)
         {
             //maybe names size too small.  
             return -3;
         }
-        pool.user_size_ = obj_size;
-        pool.user_name_ = name_id;
-        pool.chunk_count_ = obj_count;
-        pool.space_size_ = zmem_pool::calculate_space_size(obj_size, obj_count);
 
-        if (head_->pool_max_used_id_ < pool_id)
+
+        conf.obj_size_ = obj_size;
+        conf.name_id_ = name_id;
+        conf.obj_count_ = obj_count;
+        conf.space_size_ = zmem_pool::calculate_space_size(obj_size, obj_count);
+        if (space_->max_used_id_ < pool_id)
         {
-            head_->pool_max_used_id_ = pool_id;
+            space_->max_used_id_ = pool_id;
         }
-        bitset.attach((u64*)8, zbitset::ceil_array_size(obj_size), false);
-        head_->versions_->obj_size_ = obj_size;
-        head_->versions_->obj_count_ = obj_count;
-        head_->versions_->obj_name_ = name_id;
-
         return 0;
     }
 
+
     template<class _Ty>
-    s32 AddPool(s32 pool_id, s32 obj_count, const std::string& specify_name = "")
+    s32 Add(s32 pool_id, s32 obj_count, const std::string& specify_name = "")
     {
         if (pool_id < 0 || pool_id >= kLimitObjectCount)
         {
@@ -121,27 +97,32 @@ public:
     
     s64 TotalSpaceSize() const 
     {
-        s64 total_space_size = 8;
-        for (s32 i = 0; i <= head_->pool_max_used_id_; i++)
+        s64 total_space_size = 0;
+        for (s32 i = 0; i <= space_->max_used_id_; i++)
         {
-            total_space_size += head_->pools_[i].space_size_;
-            total_space_size += head_->bitsets_[i].array_size() * zbitset::kByteSize;
+            total_space_size += space_->conf_[i].space_size_;
         }
         return total_space_size;
     }
 
-    s32 CheckVersion(const ObjectPoolHead * target)
+    s32 Diff(const PoolSpace* other)
     {
-        int ret = memcmp(&target->versions_, &head_->versions_, sizeof(ObjectPoolVersion) * kLimitObjectCount);
+        if (other == nullptr || space_ == nullptr)
+        {
+            return -1;
+        }
+
+        int ret = memcmp(&other->conf_, &space_->conf_, sizeof(PoolConf) * kLimitObjectCount);
         if (ret != 0)
         {
             return ret;
         }
-        if (head_->pool_max_used_id_ != target->pool_max_used_id_)
+
+        if (space_->max_used_id_ != other->max_used_id_)
         {
-            return head_->pool_max_used_id_ - target->pool_max_used_id_;
+            return space_->max_used_id_ - other->max_used_id_;
         }
-        ret = memcmp(&target->object_names_, &head_->object_names_, sizeof(char) * kLimitObjectCount);
+        ret = memcmp(&other->names_, &space_->names_, sizeof(char) * kLimitObjectCount);
         if (ret != 0)
         {
             return ret;
@@ -149,9 +130,6 @@ public:
         return 0;
     }
 
-private:
-    zsymbols symbols_;
-    ObjectPoolHead* head_;
 };
 
 

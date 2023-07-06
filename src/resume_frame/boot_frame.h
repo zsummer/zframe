@@ -11,85 +11,52 @@
 
 #include "frame_def.h"
 #include "base_frame.h"
-#include "object_pool_helper.h"
-
-
-
-static constexpr u32 kPageOrder = 20; //1m  
-static constexpr u32 kHeapSpaceOrder = 8; // 8:256,  10:1024  
-
-#define SPACE_ALIGN(bytes) zmalloc_align_value(bytes, 16)
-
-
-enum  ShmSpace : u32
-{
-    kMainFrame = 0,
-    kPool,
-    kBuddy,
-    kMalloc,
-    kHeap,
-};
-
-
-
+#include "frame_option.h"
 
 
 template <class Frame>  //derive from BaseFrame  
 class FrameDelegate
 {
-public:
+private:
     static_assert(std::is_base_of<BaseFrame, Frame>::value, "");
+    static inline char*& ShmBaseSpace()
+    {
+        static char* g_shm_space = nullptr;
+        return g_shm_space;
+    }
+    static inline zshm_space& ShmSpace()
+    {
+        return *(zshm_space*)(ShmBaseSpace());
+    }
+
 public:
     static Frame& Instance()
     {
-        return *space<Frame, ShmSpace::kMainFrame>();
+        return *SubSpace<Frame, ShmSpace::kMainFrame>();
     }
 
-    static inline char*& ShmInstance()
-    {
-        static char* g_instance_ptr = nullptr;
-        return g_instance_ptr;
-    }
-
-    static inline zshm_space_entry& SpaceEntry()
-    {
-        return *(zshm_space_entry*)(ShmInstance());
-    }
     template <class T, u32 ID>
-    static inline T* space()
+    static inline T* SubSpace()
     {
-        return (T*)(ShmInstance() + SpaceEntry().spaces_[ID].offset_);
+        return (T*)(ShmBaseSpace() + ShmSpace().subs_[ID].offset_);
     }
+
+
 private:
-    template<class T, class ... Args>
-    static inline void RebuildVPTR(void* addr, Args ... args)
-    {
-        zshm_ptr<T>(addr).fix_vptr();
-    }
-    template<class T, class ... Args>
-    static inline void BuildObject(void* addr, Args ... args)
-    {
-        new (addr) T(args...);
-    }
-    template<class T>
-    static inline void DestroyObject(T* addr)
-    {
-        addr->~T();
-    }
 
     static inline void* AllocLarge(u64 bytes)
     {
         bytes += zbuddy_shift_size(kPageOrder) - 1;
         u32 pages = (u32)(bytes >> kPageOrder);
-        u64 page_index = space<zbuddy, ShmSpace::kBuddy>()->alloc_page(pages);
-        void* addr = space<char, ShmSpace::kHeap>() + (page_index << kPageOrder);
+        u64 page_index = SubSpace<zbuddy, ShmSpace::kBuddy>()->alloc_page(pages);
+        void* addr = SubSpace<char, ShmSpace::kHeap>() + (page_index << kPageOrder);
         return addr;
     }
     static inline u64 FreeLarge(void* addr, u64 bytes)
     {
-        u64 offset = (char*)addr - space<char, ShmSpace::kHeap>();
+        u64 offset = (char*)addr - SubSpace<char, ShmSpace::kHeap>();
         u32 page_index = (u32)(offset >> kPageOrder);
-        u32 pages = space<zbuddy, ShmSpace::kBuddy>()->free_page(page_index);
+        u32 pages = SubSpace<zbuddy, ShmSpace::kBuddy>()->free_page(page_index);
         u64 free_bytes = pages << kPageOrder;
         if (free_bytes < bytes)
         {
@@ -97,122 +64,109 @@ private:
         }
         return free_bytes;
     }
+
+    template<class T, class ... Args>
+    static inline void RebuildVPTR(void* addr, Args ... args) {zshm_ptr<T>(addr).fix_vptr();}
+    template<class T, class ... Args>
+    static inline void BuildObject(void* addr, Args ... args){new (addr) T(args...);}
+    template<class T>
+    static inline void DestroyObject(T* addr){addr->~T();}
+
 public:
-    static inline s32 InitSpaceFromConfig(zshm_space_entry& params, bool isUseHeap);
     static inline s32 BuildShm(bool isUseHeap);
     static inline s32 ResumeShm(bool isUseHeap);
     static inline s32 HoldShm(bool isUseHeap);
     static inline s32 DestroyShm(bool isUseHeap, bool self, bool force);
-private:
-    static ObjectPoolHelper helper_;
 };
 
-template <class Frame>
-ObjectPoolHelper FrameDelegate<Frame>::helper_;
 
-template <class Frame>  
-s32 FrameDelegate<Frame>::InitSpaceFromConfig(zshm_space_entry& params, bool isUseHeap)
-{
-    memset(&params, 0, sizeof(params));
-    params.shm_key_ = 198709;
-    params.use_heap_ = isUseHeap;
-#ifdef WIN32
-
-#else
-    params.use_fixed_address_ = true;
-    params.space_addr_ = 0x00006AAAAAAAAAAAULL;
-    params.space_addr_ = 0x0000700000000000ULL;
-#endif // WIN32
-
-    s32 ret = helper_.AddPool(23, 10, 100, "test");
-    if (ret != 0)
-    {
-        return ret;
-    }
-
-
-    params.spaces_[ShmSpace::kMainFrame].size_ = SPACE_ALIGN(sizeof(Frame));
-    params.spaces_[ShmSpace::kPool].size_ = kPoolHeadSize + helper_.TotalSpaceSize();
-    params.spaces_[ShmSpace::kBuddy].size_ = SPACE_ALIGN(zbuddy::zbuddy_size(kHeapSpaceOrder));
-    params.spaces_[ShmSpace::kMalloc].size_ = SPACE_ALIGN(zmalloc::zmalloc_size());
-    params.spaces_[ShmSpace::kHeap].size_ = SPACE_ALIGN(zbuddy_shift_size(kHeapSpaceOrder + kPageOrder));
-
-    params.whole_space_.size_ += SPACE_ALIGN(sizeof(params));
-    for (u32 i = 0; i < ZSHM_MAX_SPACES; i++)
-    {
-        params.spaces_[i].offset_ = params.whole_space_.size_;
-        params.whole_space_.size_ += params.spaces_[i].size_;
-    }
-    return 0;
-}
 
 
 template <class Frame>
 s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
 {
-    zshm_space_entry params;
-    InitSpaceFromConfig(params, isUseHeap);
-
-
-    zshm_boot booter;
-    zshm_space_entry* shm_space = nullptr;
-    s32 ret = booter.build_frame(params, shm_space);
-    if (ret != 0 || shm_space == nullptr)
+    FrameConf conf;
+    s32 ret = Frame().Config(conf);
+    if (ret != 0)
     {
-        LogError() << "build_frame error. shm_space:" << (void*)shm_space << ", ret:" << ret;
         return ret;
     }
-    ShmInstance() = (char*)shm_space;
 
-    SpaceEntry().space_addr_ = (u64)shm_space;
-
-    BuildObject<Frame>(space<Frame, ShmSpace::kMainFrame>());
-
-    ObjectPoolHead* pool_head = space<ObjectPoolHead, ShmSpace::kPool>();
-    memcpy(pool_head, helper_.head(), kPoolHeadSize);
-    pool_head->symbols_.attach(pool_head->object_names_, kLimitObjectNameBuffSize, kLimitObjectNameBuffSize); //rebuild symbols   
-    char* pool_addr = (char*)pool_head + kPoolHeadSize;
-
-    for (s32 i = 0; i <= pool_head->pool_max_used_id_; i++)
+    if (true)
     {
-        if (pool_head->pools_[i].space_size_ == 0)
+        zshm_boot booter;
+        zshm_space* shm_space = nullptr;
+        ret = booter.build_frame(conf.space_conf_, shm_space);
+        if (ret != 0 || shm_space == nullptr)
         {
-            continue;
+            LogError() << "build_frame error. shm_space:" << (void*)shm_space << ", ret:" << zshm_errno::str(ret);
+            return ret;
         }
-        //rebuild bitesets in real space   
-        pool_head->bitsets_[i].attach((u64*)pool_addr, pool_head->bitsets_[i].array_size(), true);
-        pool_addr += pool_head->bitsets_[i].array_size() * zbitset::kByteSize;
-        //rebuild pool in real space  
-        zmem_pool& pool = pool_head->pools_[i];
-        s32 ret = pool.init(pool.user_size_, pool.user_name_, pool.chunk_count_, pool_addr, pool.space_size_);
+        ShmBaseSpace() = (char*)shm_space;
+        ShmSpace().fixed_ = (u64)shm_space;
+    }
+
+
+    if (true)
+    {
+        BuildObject<Frame>(SubSpace<Frame, ShmSpace::kMainFrame>());
+    }
+
+    if (true)
+    {
+        PoolSpace* space = SubSpace<PoolSpace, ShmSpace::kPool>();
+        memcpy(space, &conf.pool_conf_, kPoolSpaceHeadSize);
+        space->symbols_.attach(space->names_, kLimitObjectNameBuffSize, kLimitObjectNameBuffSize); //rebuild symbols   
+        u64 offset = kPoolSpaceHeadSize;
+
+        for (s32 i = 0; i <= space->max_used_id_; i++)
+        {
+            if (space->pools_[i].obj_count_ == 0)
+            {
+                continue;
+            }
+            //rebuild pool in real SubSpace  addr  
+            zmem_pool& pool = space->pools_[i];
+            PoolConf& conf = space->conf_[i];
+            s32 ret = pool.init(conf.obj_size_, conf.name_id_, conf.obj_count_, (char*)space + offset, conf.space_size_);
+            if (ret != 0)
+            {
+                LogError() << "";
+                return ret;
+            }
+            offset += conf.space_size_;
+            LogDebug() << "build pool " << space->symbols_.at(pool.name_id_) << ":" << pool;
+        }
+
+        if (offset >= ShmSpace().subs_[kPool].size_)
+        {
+            return -2;
+        }
+    }
+
+    if (true)
+    {
+        zbuddy* buddy_ptr = SubSpace<zbuddy, ShmSpace::kBuddy>();
+        memset(buddy_ptr, 0, conf.space_conf_.subs_[ShmSpace::kBuddy].size_);
+        buddy_ptr->set_global(buddy_ptr);
+        zbuddy::build_zbuddy(buddy_ptr, conf.space_conf_.subs_[ShmSpace::kBuddy].size_, kHeapSpaceOrder, &ret);
         if (ret != 0)
         {
             LogError() << "";
             return ret;
         }
-        pool_addr += pool.space_size_;
-        LogDebug() << "init object[" << pool_head->symbols_.at(pool.user_name_) << "] size:" << pool.user_size_ << ", count:" << pool.chunk_count_;
     }
 
-
-    zbuddy* buddy_ptr = space<zbuddy, ShmSpace::kBuddy>();
-    memset(buddy_ptr, 0, params.spaces_[ShmSpace::kBuddy].size_);
-    buddy_ptr->set_global(buddy_ptr);
-    zbuddy::build_zbuddy(buddy_ptr, params.spaces_[ShmSpace::kBuddy].size_, kHeapSpaceOrder, &ret);
-    if (ret != 0)
+    if (true)
     {
-        LogError() << "";
-        return ret;
+        zmalloc* malloc_ptr = SubSpace<zmalloc, ShmSpace::kMalloc>();
+        memset(malloc_ptr, 0, zmalloc::zmalloc_size());
+        malloc_ptr->set_global(malloc_ptr);
+        malloc_ptr->set_block_callback(&AllocLarge, &FreeLarge);
+        malloc_ptr->check_panic();
     }
 
-    zmalloc* malloc_ptr = space<zmalloc, ShmSpace::kMalloc>();
-    memset(malloc_ptr, 0, zmalloc::zmalloc_size());
-    malloc_ptr->set_global(malloc_ptr);
-    malloc_ptr->set_block_callback(&AllocLarge, &FreeLarge);
-    malloc_ptr->check_health();
-
-
-    ret = space<Frame, ShmSpace::kMainFrame>()->Start();
+    ret = SubSpace<Frame, ShmSpace::kMainFrame>()->Start();
     if (ret != 0)
     {
         LogError() << "";
@@ -227,52 +181,84 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
 template <class Frame>
 s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
 {
-    zshm_space_entry params;
-    InitSpaceFromConfig(params, isUseHeap);
-    zshm_boot booter;
-    zshm_space_entry* shm_space = nullptr;
-    s32 ret = booter.resume_frame(params, shm_space);
-    if (ret != 0 || shm_space == nullptr)
-    {
-        LogError() << "booter.resume_frame error. shm_space:" << (void*)shm_space << ", ret:" << ret;
-        return ret;
-    }
-    ShmInstance() = (char*)shm_space;
-
-    SpaceEntry().space_addr_ = (u64)shm_space;
-    Frame* m = space<Frame, ShmSpace::kMainFrame>();
-    RebuildVPTR<Frame>(m);
-
-
-    ObjectPoolHead* pool_head = space<ObjectPoolHead, ShmSpace::kPool>();
-    if (helper_.CheckVersion(pool_head) != 0)
-    {
-        LogError() << "";
-        return ret;
-    }
-
-    for (s32 i = 0; i <= pool_head->pool_max_used_id_; i++)
-    {
-        //resume object vptr
-        zmem_pool& pool = pool_head->pools_[i];
-        LogDebug() << "resume object[" << pool_head->symbols_.at(pool.user_name_) << "] size:" << pool.user_size_ << ", count:" << pool.chunk_count_;
-    }
-
-    zbuddy* buddy_ptr = space<zbuddy, ShmSpace::kBuddy>();
-    buddy_ptr->set_global(buddy_ptr);
-    zbuddy::rebuild_zbuddy(buddy_ptr, params.spaces_[ShmSpace::kBuddy].size_, kHeapSpaceOrder, &ret);
+    FrameConf conf;
+    s32 ret = Frame().Config(conf);
     if (ret != 0)
     {
-        LogError() << "";
         return ret;
     }
 
-    zmalloc* malloc_ptr = space<zmalloc, ShmSpace::kMalloc>();
-    malloc_ptr->set_global(malloc_ptr);
-    malloc_ptr->set_block_callback(&AllocLarge, &FreeLarge);
-    malloc_ptr->check_health();
 
-    ret = space<Frame, ShmSpace::kMainFrame>()->Resume();
+    if (true)
+    {
+        zshm_boot booter;
+        zshm_space* shm_space = nullptr;
+        ret = booter.resume_frame(conf.space_conf_, shm_space);
+        if (ret != 0 || shm_space == nullptr)
+        {
+            LogError() << "booter.resume_frame error. shm_space:" << (void*)shm_space << ", ret:" << ret;
+            return ret;
+        }
+        ShmBaseSpace() = (char*)shm_space;
+        ShmSpace().fixed_ = (u64)shm_space;
+    }
+
+
+
+    
+    if (true)
+    {
+        Frame* m = SubSpace<Frame, ShmSpace::kMainFrame>();
+        RebuildVPTR<Frame>(m);
+    }
+
+
+    if (true)
+    {
+        PoolSpace* space = SubSpace<PoolSpace, ShmSpace::kPool>();
+        PoolHelper helper;
+        s32 ret = helper.Attach(conf.pool_conf_, false);
+        if (helper.Diff(space) != 0)
+        {
+            LogError() << "pool version error";
+            return ret;
+        }
+
+        for (s32 i = 0; i <= space->max_used_id_; i++)
+        {
+            //resume object vptr
+            zmem_pool& pool = space->pools_[i];
+            if (pool.obj_count_ == 0)
+            {
+                continue;
+            }
+            LogDebug() << "resuming pool " << space->symbols_.at(pool.name_id_) << pool;
+        }
+    }
+
+    if (true)
+    {
+        zbuddy* buddy_ptr = SubSpace<zbuddy, ShmSpace::kBuddy>();
+        buddy_ptr->set_global(buddy_ptr);
+        zbuddy::rebuild_zbuddy(buddy_ptr, conf.space_conf_.subs_[ShmSpace::kBuddy].size_, kHeapSpaceOrder, &ret);
+        if (ret != 0)
+        {
+            LogError() << "";
+            return ret;
+        }
+
+    }
+
+    if (true)
+    {
+        zmalloc* malloc_ptr = SubSpace<zmalloc, ShmSpace::kMalloc>();
+        malloc_ptr->set_global(malloc_ptr);
+        malloc_ptr->set_block_callback(&AllocLarge, &FreeLarge);
+        malloc_ptr->check_panic();
+    }
+
+
+    ret = SubSpace<Frame, ShmSpace::kMainFrame>()->Resume();
     if (ret != 0)
     {
         LogError() << "";
@@ -288,17 +274,22 @@ s32 FrameDelegate<Frame>::HoldShm(bool isUseHeap)
         LogError() << "";
         return -1;
     }
-    zshm_space_entry params;
-    InitSpaceFromConfig(params, isUseHeap);
+    FrameConf conf;
+    s32 ret = Frame().Config(conf);
+    if (ret != 0)
+    {
+        return ret;
+    }
+
     zshm_boot booter;
-    zshm_space_entry* shm_space = nullptr;
-    s32 ret = booter.resume_frame(params, shm_space);
+    zshm_space* shm_space = nullptr;
+    ret = booter.resume_frame(conf.space_conf_, shm_space);
     if (ret != 0 || shm_space == nullptr)
     {
         LogError() << "";
         return ret;
     }
-    ShmInstance() = (char*)shm_space;
+    ShmBaseSpace() = (char*)shm_space;
     return 0;
 }
 
@@ -330,7 +321,7 @@ s32 FrameDelegate<Frame>::DestroyShm(bool isUseHeap, bool self, bool force)
         }
     }
 
-    if (ShmInstance() == nullptr)
+    if (ShmBaseSpace() == nullptr)
     {
         LogError() << "";
         return -1;
@@ -338,10 +329,10 @@ s32 FrameDelegate<Frame>::DestroyShm(bool isUseHeap, bool self, bool force)
 
     if (!force)
     {
-        DestroyObject(space<Frame, ShmSpace::kMainFrame>());
+        DestroyObject(SubSpace<Frame, ShmSpace::kMainFrame>());
     }
 
-    ret = zshm_boot::destroy_frame(SpaceEntry());
+    ret = zshm_boot::destroy_frame(ShmSpace());
     if (ret != 0)
     {
         LogError() << "";

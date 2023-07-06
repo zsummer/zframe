@@ -1,48 +1,65 @@
+
 /*
-* zshm_boot License
 * Copyright (C) 2019 YaweiZhang <yawei.zhang@foxmail.com>.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+* All rights reserved
+* This file is part of the zframe, used MIT License.
 */
 
 
 #ifndef  _BASE_FRAME_H_
 #define _BASE_FRAME_H_
+#include "frame_option.h"
+#include "object_pool_frame.h"
 
 
-#ifndef ZBASE_SHORT_TYPE
-#define ZBASE_SHORT_TYPE
-using s8 = char;
-using u8 = unsigned char;
-using s16 = short int;
-using u16 = unsigned short int;
-using s32 = int;
-using u32 = unsigned int;
-using s64 = long long;
-using u64 = unsigned long long;
-using f32 = float;
-using f64 = double;
-#endif
-
-#if __GNUG__
-#define ZBASE_ALIAS __attribute__((__may_alias__))
-#else
-#define ZBASE_ALIAS
-#endif
 
 class BaseFrame
 {
 public:
+    virtual s32 Config(FrameConf& conf)
+    {
+        memset(&conf, 0, sizeof(conf));
+        conf.space_conf_.shm_key_ = 198709;
+        conf.space_conf_.use_heap_ = false;
+#ifdef WIN32
+
+#else
+        conf.space_conf_.use_fixed_ = 1;
+        conf.space_conf_.fixed_ = 0x00006AAAAAAAAAAAULL;
+        conf.space_conf_.fixed_ = 0x0000700000000000ULL;
+#endif // WIN32
+
+        PoolHelper helper;
+        helper.Attach(conf.pool_conf_, true);
+        s32 ret = helper.Add(23, 10, 100, "test");
+        if (ret != 0)
+        {
+            return ret;
+        }
+
+
+        conf.space_conf_.subs_[ShmSpace::kMainFrame].size_ = SPACE_ALIGN(sizeof(BaseFrame));
+        conf.space_conf_.subs_[ShmSpace::kPool].size_ = kPoolSpaceHeadSize + helper.TotalSpaceSize();
+        conf.space_conf_.subs_[ShmSpace::kBuddy].size_ = SPACE_ALIGN(zbuddy::zbuddy_size(kHeapSpaceOrder));
+        conf.space_conf_.subs_[ShmSpace::kMalloc].size_ = SPACE_ALIGN(zmalloc::zmalloc_size());
+        conf.space_conf_.subs_[ShmSpace::kHeap].size_ = SPACE_ALIGN(zbuddy_shift_size(kHeapSpaceOrder + kPageOrder));
+
+        conf.space_conf_.whole_.size_ += SPACE_ALIGN(sizeof(conf.space_conf_));
+        for (u32 i = 0; i < ZSHM_MAX_SPACES; i++)
+        {
+            conf.space_conf_.subs_[i].offset_ = conf.space_conf_.whole_.size_;
+            conf.space_conf_.whole_.size_ += conf.space_conf_.subs_[i].size_;
+        }
+
+
+        return 0;
+    }
+
+    virtual s32 Init()
+    {
+        return 0;
+    }
+
     virtual s32 Start()
     {
         return 0;
@@ -51,10 +68,7 @@ public:
     {
         return 0;
     }
-    virtual s32 Init()
-    {
-        return 0;
-    }
+
 private:
 
 };

@@ -80,8 +80,12 @@ using f64 = double;
 #include "zshm_loader.h"
 #include "zshm_boot.h"
 
+#include "zmem_pool.h"
 
-
-
+inline FNLog::LogStream& operator <<(FNLog::LogStream& ls, zmem_pool& pool)
+{
+    ls << "[size:" << pool.obj_size_ << ", max:" << pool.obj_count_ << ", used:" << pool.used_count_ << "]";
+    return ls;
+}
 
 #endif
