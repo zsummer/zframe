@@ -20,16 +20,19 @@ public:
     {
         static u32 g_uid = 0;
         uid_ = g_uid++;
+        seq_ = 0;
     }
 
     s32 Tick(s64 now_ms)
     {
-        LogDebug() << "Unit:" << uid_ << " ticked:" << now_ms;
+        seq_++;
+        LogDebug() << "Unit:" <<(void*)this <<":" << uid_ << " ticked:" << seq_ << ", now_ms:" << now_ms;
         return 0;
     }
 
 private:
     u32 uid_;
+    u32 seq_;
 };
 
 
@@ -41,7 +44,7 @@ s32 UnitTick(void* unit, s64 now_ms)
 
 
 
-PoolForeachs<10> g_foreach;
+
 
 class TestServer : public BaseFrame
 {
@@ -75,9 +78,6 @@ public:
             conf.space_conf_.subs_[i].offset_ = conf.space_conf_.whole_.size_;
             conf.space_conf_.whole_.size_ += conf.space_conf_.subs_[i].size_;
         }
-
-
-
         return 0;
     }
     s32 Start()
@@ -91,7 +91,8 @@ public:
         zmalloc::instance().free_memory(zmalloc::instance().alloc_memory(1000));
         zmalloc::instance().check_panic();
         LogInfo() << "MyServer Start";
-        g_foreach.add(0, 0, 2, 10, 1000, UnitTick);
+        foreachs_ = new (zmalloc::instance().alloc_memory<0>(sizeof(PoolForeachs))) PoolForeachs();
+        foreachs_->add(0, 0, 2, 10, 1000, UnitTick);
         SubSpace<PoolSpace, kPool>()->pools_[0].create<Unit>();
         SubSpace<PoolSpace, kPool>()->pools_[0].create<Unit>();
 
@@ -108,16 +109,17 @@ public:
         zmalloc::instance().free_memory(zmalloc::instance().alloc_memory(1000));
         zmalloc::instance().check_panic();
         LogInfo() << "MyServer Resume";
-        g_foreach.add(0, 0, 2, 10, 1000, UnitTick);
-        SubSpace<PoolSpace, kPool>()->pools_[0].create<Unit>();
-        SubSpace<PoolSpace, kPool>()->pools_[0].create<Unit>();
+        foreachs_->resume(0, 0, 2, 10, 1000, UnitTick);
         return 0;
     }
     s32 Tick(s64 now_ms)
     {
-        g_foreach.window_foreach(now_ms);
+        foreachs_->window_foreach(now_ms);
         return 0;
     }
+
+public:
+    PoolForeachs *foreachs_;
 };
 
 
@@ -170,19 +172,20 @@ int main(int argc, char *argv[])
 
     ASSERT_TEST(boot_server(option) == 0);
 
-
-    for (s32 i = 0; i < 300; i++)
+    if (option.find("del") == std::string::npos)
     {
-        FrameDelegate<TestServer>::DoTick(zclock::now_ms());
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        for (s32 i = 0; i < 300; i++)
+        {
+            FrameDelegate<TestServer>::DoTick(zclock::now_ms());
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        ASSERT_TEST(boot_server("exit") == 0);
     }
 
 
-    ASSERT_TEST(boot_server("exit") == 0);
+    
 
     LogInfo() << "all test finish .";
-
-
 
     return 0;
 }

@@ -12,6 +12,13 @@
 #include "frame_def.h"
 #include "frame_option.h"
 
+
+/*
+* 辅助注册对象池: 从配置预生成对象池头部空间, 并计算空间信息    
+* 临时对象 不直接放入ShmSpace  
+*/
+
+
 class PoolHelper
 {
 private:
@@ -88,15 +95,7 @@ public:
             name = zsymbols::readable_class_name<_Ty>();
         }
         s32 obj_size = (s32)sizeof(_Ty);
-        u64 vptr = 0;
-        if (std::is_polymorphic<_Ty>::value)
-        {
-            _Ty* p = new _Ty();
-            vptr = *(u64*)p;
-            delete p;
-        }
-
-
+        u64 vptr = zmem_pool::get_vptr<_Ty>();
         s32 ret = Add(pool_id, obj_size, vptr, obj_count, name);
         if (ret != 0)
         {

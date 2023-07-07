@@ -15,7 +15,7 @@
 
 
 
-using PoolHook = s32(*)(void*, s64);
+using PoolTick = s32(*)(void*, s64);
 
 
 class ForeachInst
@@ -26,37 +26,47 @@ public:
         PoolSpace* space = SubSpace<PoolSpace, kPool>();
         for (u32 i = begin_id; i < end_id; i++)
         {
-            hook_(space->pools_[pool_id_].fixed(i), now_ms);
+            tick_(space->pools_[pool_id_].fixed(i), now_ms);
         }
         return 0;
     }
-    s32 pool_id_;
-    PoolHook hook_;
+    u32 pool_id_;
+    PoolTick tick_;
 };
 using PoolForeach = zforeach<ForeachInst>;
 
 
 
 
-template<u32 MaxForeachs = 100>
+
 class PoolForeachs
 {
 public:
 
-    inline s32 add(u32 pool_id, u32 begin_id, u32 end_id, u32 base_frame_len, u32 long_frame_len, PoolHook hook)
+    inline s32 add(u32 pool_id, u32 begin_id, u32 end_id, u32 base_frame_len, u32 long_frame_len, PoolTick hook)
     {
-        if (foreachs_.full())
-        {
-            return -1;
-        }
         PoolForeach f;
         f.foreach_inst_.pool_id_ = pool_id;
-        f.foreach_inst_.hook_ = hook;
+        f.foreach_inst_.tick_ = hook;
         foreachs_.push_back(f);
         s32 ret = foreachs_.back().init(0, begin_id, end_id, base_frame_len, long_frame_len);
         return ret;
     }
 
+    inline s32 resume(u32 pool_id, u32 begin_id, u32 end_id, u32 base_frame_len, u32 long_frame_len, PoolTick hook)
+    {
+        for (u32 i = 0; i < foreachs_.size(); i++)
+        {
+            PoolForeach& pf = foreachs_[i];
+            pf.resume();
+            if (pf.foreach_inst_.pool_id_ == pool_id)
+            {
+                pf.foreach_inst_.tick_ = hook;
+                return 0;
+            }
+        }
+        return -1;
+    }
 
     inline s32 window_foreach(s64 now_ms)
     {
@@ -68,7 +78,7 @@ public:
     }
 
 private:
-    zarray<PoolForeach, MaxForeachs> foreachs_;
+    shm_vector<PoolForeach> foreachs_;
 };
 
 #endif

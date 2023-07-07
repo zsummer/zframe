@@ -85,11 +85,30 @@ s32 FrameDelegate<Frame>::BuildShm(const std::string& options)
         ShmSpace().fixed_ = (u64)shm_space;
     }
 
+    if (true)
+    {
+        zbuddy* buddy_ptr = SubSpace<zbuddy, ShmSpace::kBuddy>();
+        memset(buddy_ptr, 0, conf.space_conf_.subs_[ShmSpace::kBuddy].size_);
+        buddy_ptr->set_global(buddy_ptr);
+        zbuddy::build_zbuddy(buddy_ptr, conf.space_conf_.subs_[ShmSpace::kBuddy].size_, kHeapSpaceOrder, &ret);
+        if (ret != 0)
+        {
+            LogError() << "";
+            return ret;
+        }
+    }
 
     if (true)
     {
-        BuildObject<Frame>(SubSpace<Frame, ShmSpace::kMainFrame>());
+        zmalloc* malloc_ptr = SubSpace<zmalloc, ShmSpace::kMalloc>();
+        memset(malloc_ptr, 0, zmalloc::zmalloc_size());
+        malloc_ptr->set_global(malloc_ptr);
+        malloc_ptr->set_block_callback(&AllocLarge, &FreeLarge);
+        malloc_ptr->check_panic();
     }
+
+
+
 
     if (true)
     {
@@ -126,25 +145,9 @@ s32 FrameDelegate<Frame>::BuildShm(const std::string& options)
 
     if (true)
     {
-        zbuddy* buddy_ptr = SubSpace<zbuddy, ShmSpace::kBuddy>();
-        memset(buddy_ptr, 0, conf.space_conf_.subs_[ShmSpace::kBuddy].size_);
-        buddy_ptr->set_global(buddy_ptr);
-        zbuddy::build_zbuddy(buddy_ptr, conf.space_conf_.subs_[ShmSpace::kBuddy].size_, kHeapSpaceOrder, &ret);
-        if (ret != 0)
-        {
-            LogError() << "";
-            return ret;
-        }
+        BuildObject<Frame>(SubSpace<Frame, ShmSpace::kMainFrame>());
     }
 
-    if (true)
-    {
-        zmalloc* malloc_ptr = SubSpace<zmalloc, ShmSpace::kMalloc>();
-        memset(malloc_ptr, 0, zmalloc::zmalloc_size());
-        malloc_ptr->set_global(malloc_ptr);
-        malloc_ptr->set_block_callback(&AllocLarge, &FreeLarge);
-        malloc_ptr->check_panic();
-    }
 
     ret = SubSpace<Frame, ShmSpace::kMainFrame>()->Start();
     if (ret != 0)
@@ -186,37 +189,7 @@ s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
 
 
     
-    if (true)
-    {
-        Frame* m = SubSpace<Frame, ShmSpace::kMainFrame>();
-        RebuildVPTR<Frame>(m);
-    }
 
-
-    if (true)
-    {
-        PoolSpace* space = SubSpace<PoolSpace, ShmSpace::kPool>();
-        //space->symbols_.attach(space->names_, kLimitObjectNameBuffSize, kLimitObjectNameBuffSize);
-        PoolHelper helper;
-        s32 ret = helper.Attach(conf.pool_conf_, false);
-        if (helper.Diff(space) != 0)
-        {
-            LogError() << "pool version error";
-            return ret;
-        }
-
-        for (s32 i = 0; i <= space->max_used_id_; i++)
-        {
-            //resume object vptr
-            zmem_pool& pool = space->pools_[i];
-            if (pool.obj_count_ == 0)
-            {
-                continue;
-            }
-            pool.resume();
-            LogDebug() << "has pool " << space->symbols_.at(pool.name_id_) << pool;
-        }
-    }
 
     if (true)
     {
@@ -239,6 +212,36 @@ s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
         malloc_ptr->check_panic();
     }
 
+    if (true)
+    {
+        PoolSpace* space = SubSpace<PoolSpace, ShmSpace::kPool>();
+        //space->symbols_.attach(space->names_, kLimitObjectNameBuffSize, kLimitObjectNameBuffSize);
+        PoolHelper helper;
+        s32 ret = helper.Attach(conf.pool_conf_, false);
+        if (helper.Diff(space) != 0)
+        {
+            LogError() << "pool version error";
+            return ret;
+        }
+
+        for (s32 i = 0; i <= space->max_used_id_; i++)
+        {
+            //resume object vptr
+            zmem_pool& pool = space->pools_[i];
+            if (pool.obj_count_ == 0)
+            {
+                continue;
+            }
+            pool.resume(space->conf_[i].vptr_);
+            LogDebug() << "has pool " << space->symbols_.at(pool.name_id_) << pool;
+        }
+    }
+
+    if (true)
+    {
+        Frame* m = SubSpace<Frame, ShmSpace::kMainFrame>();
+        RebuildVPTR<Frame>(m);
+    }
 
     ret = SubSpace<Frame, ShmSpace::kMainFrame>()->Resume();
     if (ret != 0)
