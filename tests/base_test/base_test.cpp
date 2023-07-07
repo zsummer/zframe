@@ -49,7 +49,7 @@ s32 UnitTick(void* unit, s64 now_ms)
 class TestServer : public BaseFrame
 {
 public:
-    s32 LoadConfig(const std::string& options, FrameConf& conf)
+    static s32 LoadConfig(const std::string& options, FrameConf& conf)
     {
         s32 ret = BaseFrame::LoadConfig(options, conf);
         if (ret != 0)
@@ -72,7 +72,7 @@ public:
         conf.space_conf_.subs_[ShmSpace::kMalloc].size_ = SPACE_ALIGN(zmalloc::zmalloc_size());
         conf.space_conf_.subs_[ShmSpace::kHeap].size_ = SPACE_ALIGN(zbuddy_shift_size(kHeapSpaceOrder + kPageOrder));
 
-        conf.space_conf_.whole_.size_ += SPACE_ALIGN(sizeof(conf.space_conf_));
+        conf.space_conf_.whole_.size_ = SPACE_ALIGN(sizeof(conf.space_conf_));
         for (u32 i = 0; i < ZSHM_MAX_SPACES; i++)
         {
             conf.space_conf_.subs_[i].offset_ = conf.space_conf_.whole_.size_;
@@ -91,8 +91,7 @@ public:
         zmalloc::instance().free_memory(zmalloc::instance().alloc_memory(1000));
         zmalloc::instance().check_panic();
         LogInfo() << "MyServer Start";
-        foreachs_ = new (zmalloc::instance().alloc_memory<0>(sizeof(PoolForeachs))) PoolForeachs();
-        foreachs_->add(0, 0, 2, 10, 1000, UnitTick);
+        foreachs_.add(0, 0, 2, 10, 1000, UnitTick);
         SubSpace<PoolSpace, kPool>()->pools_[0].create<Unit>();
         SubSpace<PoolSpace, kPool>()->pools_[0].create<Unit>();
 
@@ -109,17 +108,17 @@ public:
         zmalloc::instance().free_memory(zmalloc::instance().alloc_memory(1000));
         zmalloc::instance().check_panic();
         LogInfo() << "MyServer Resume";
-        foreachs_->resume(0, 0, 2, 10, 1000, UnitTick);
+        foreachs_.resume(0, 0, 2, 10, 1000, UnitTick);
         return 0;
     }
     s32 Tick(s64 now_ms)
     {
-        foreachs_->window_foreach(now_ms);
+        foreachs_.window_foreach(now_ms);
         return 0;
     }
 
 public:
-    PoolForeachs *foreachs_;
+    PoolForeachs foreachs_;
 };
 
 
@@ -183,7 +182,7 @@ int main(int argc, char *argv[])
     }
 
 
-    
+
 
     LogInfo() << "all test finish .";
 

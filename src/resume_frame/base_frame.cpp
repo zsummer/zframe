@@ -6,6 +6,7 @@ zshm_space* g_shm_space = nullptr;
 
 s32 BaseFrame::LoadConfig(const std::string& options, FrameConf& conf)
 {
+
     memset(&conf, 0, sizeof(conf));
     conf.space_conf_.shm_key_ = 198709;
     conf.space_conf_.use_heap_ = false;
@@ -33,7 +34,7 @@ s32 BaseFrame::LoadConfig(const std::string& options, FrameConf& conf)
     conf.space_conf_.subs_[ShmSpace::kMalloc].size_ = SPACE_ALIGN(zmalloc::zmalloc_size());
     conf.space_conf_.subs_[ShmSpace::kHeap].size_ = SPACE_ALIGN(zbuddy_shift_size(kHeapSpaceOrder + kPageOrder));
 
-    conf.space_conf_.whole_.size_ += SPACE_ALIGN(sizeof(conf.space_conf_));
+    conf.space_conf_.whole_.size_ = SPACE_ALIGN(sizeof(conf.space_conf_));
     for (u32 i = 0; i < ZSHM_MAX_SPACES; i++)
     {
         conf.space_conf_.subs_[i].offset_ = conf.space_conf_.whole_.size_;

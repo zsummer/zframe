@@ -15,12 +15,11 @@
 
 
 template <class Frame>  //derive from BaseFrame  
+//requires std::is_base_of<BaseFrame, Frame>::value
 class FrameDelegate
 {
-
-
 private:
-
+    static_assert(std::is_base_of<BaseFrame, Frame>::value, "need base of BaseFrame");
     static inline void* AllocLarge(u64 bytes)
     {
         bytes += zbuddy_shift_size(kPageOrder) - 1;
@@ -53,8 +52,8 @@ public:
     static inline s32 BuildShm(const std::string& options);
     static inline s32 ResumeShm(const std::string& options);
     static inline s32 ExitShm(const std::string& options); //正常退出并清理 
-    static inline s32 DoTick(s64 now_ms);
     static inline s32 DelShm(const std::string& options);
+    static inline s32 DoTick(s64 now_ms);
 };
 
 
@@ -64,7 +63,7 @@ template <class Frame>
 s32 FrameDelegate<Frame>::BuildShm(const std::string& options)
 {
     FrameConf conf;
-    s32 ret = Frame().LoadConfig(options, conf);
+    s32 ret = Frame::LoadConfig(options, conf);
     if (ret != 0)
     {
         LogError();
@@ -165,7 +164,7 @@ template <class Frame>
 s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
 {
     FrameConf conf;
-    s32 ret = Frame().LoadConfig(options, conf);
+    s32 ret = Frame::LoadConfig(options, conf);
     if (ret != 0)
     {
         return ret;
@@ -287,7 +286,7 @@ s32 FrameDelegate<Frame>::DelShm(const std::string& options)
 {
     s32 ret = 0;
     FrameConf conf;
-    ret = Frame().LoadConfig(options, conf);
+    ret = Frame::LoadConfig(options, conf);
     if (ret != 0)
     {
         LogError() << "Destroy shm has error: load config error ";
