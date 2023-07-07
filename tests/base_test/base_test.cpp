@@ -46,14 +46,17 @@ PoolForeachs<10> g_foreach;
 class MyServer : public BaseFrame
 {
 public:
-    s32 Config(FrameConf& conf)
+    s32 Config(const std::string& options, FrameConf& conf)
     {
-        s32 ret = BaseFrame::Config(conf);
+        s32 ret = BaseFrame::Config(options, conf);
         if (ret != 0)
         {
             return ret;
         }
         conf.space_conf_.subs_[kMainFrame].size_ = SPACE_ALIGN(sizeof(MyServer));
+
+        conf.space_conf_.use_heap_ = options.find("heap") != std::string::npos;
+
 
         PoolHelper helper;
         helper.Attach(conf.pool_conf_, true);
@@ -122,9 +125,9 @@ public:
 class StressServer : public BaseFrame
 {
 public:
-    s32 Config(FrameConf& conf)
+    s32 Config(const std::string& options, FrameConf& conf)
     {
-        s32 ret = BaseFrame::Config(conf);
+        s32 ret = BaseFrame::Config(options, conf);
         if (ret != 0)
         {
             return ret;
@@ -175,31 +178,26 @@ public:
 
 s32 boot_server(const std::string& option)
 {
-    bool use_heap = false;
-    if (option.find("heap") != std::string::npos)
-    {
-        use_heap = true;
-    }
 
     if (option.find("stress") != std::string::npos)
     {
         if (option.find("start") != std::string::npos)
         {
-            ASSERT_TEST(FrameDelegate<StressServer>::BuildShm(use_heap) == 0);
+            ASSERT_TEST(FrameDelegate<StressServer>::BuildShm(option) == 0);
         }
         if (option.find("stop") != std::string::npos)
         {
-            ASSERT_TEST(FrameDelegate<StressServer>::DestroyShm(use_heap, false, true) == 0);
+            ASSERT_TEST(FrameDelegate<StressServer>::DestroyShm(option, false, true) == 0);
         }
 
         if (option.find("resume") != std::string::npos)
         {
-            ASSERT_TEST(FrameDelegate<StressServer>::ResumeShm(use_heap) == 0);
+            ASSERT_TEST(FrameDelegate<StressServer>::ResumeShm(option) == 0);
         }
 
         if (option.find("hold") != std::string::npos)
         {
-            ASSERT_TEST(FrameDelegate<StressServer>::HoldShm(use_heap) == 0);
+            ASSERT_TEST(FrameDelegate<StressServer>::HoldShm(option) == 0);
         }
 
     }
@@ -207,21 +205,21 @@ s32 boot_server(const std::string& option)
     {
         if (option.find("start") != std::string::npos)
         {
-            ASSERT_TEST(FrameDelegate<MyServer>::BuildShm(use_heap) == 0);
+            ASSERT_TEST(FrameDelegate<MyServer>::BuildShm(option) == 0);
         }
         if (option.find("stop") != std::string::npos)
         {
-            ASSERT_TEST(FrameDelegate<MyServer>::DestroyShm(use_heap, false, true) == 0);
+            ASSERT_TEST(FrameDelegate<MyServer>::DestroyShm(option, false, true) == 0);
         }
 
         if (option.find("resume") != std::string::npos)
         {
-            ASSERT_TEST(FrameDelegate<MyServer>::ResumeShm(use_heap) == 0);
+            ASSERT_TEST(FrameDelegate<MyServer>::ResumeShm(option) == 0);
         }
 
         if (option.find("hold") != std::string::npos)
         {
-            ASSERT_TEST(FrameDelegate<MyServer>::HoldShm(use_heap) == 0);
+            ASSERT_TEST(FrameDelegate<MyServer>::HoldShm(option) == 0);
         }
 
     }

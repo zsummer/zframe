@@ -24,9 +24,9 @@ public:
     inline s32 hook(const zforeach_impl::subframe& sub, u32 begin_id, u32 end_id, s64 now_ms)
     {
         PoolSpace* space = SubSpace<PoolSpace, kPool>();
-        for (s32 i = begin_id; i < end_id; i++)
+        for (u32 i = begin_id; i < end_id; i++)
         {
-            hook_(space->pools_[pool_id_].user_data<char>(i), now_ms);
+            hook_(space->pools_[pool_id_].fixed(i), now_ms);
         }
         return 0;
     }

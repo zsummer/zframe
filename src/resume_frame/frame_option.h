@@ -45,6 +45,7 @@ struct PoolConf
     s32 obj_count_;
     s32 name_id_;
     s64 space_size_;
+    u64 vptr_; //0 is no vptr 
 };
 
 

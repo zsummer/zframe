@@ -36,7 +36,7 @@ public:
 
     PoolSpace* space() const { return space_; }
 
-    s32 Add(s32 pool_id, s32 obj_size, s32 obj_count, const std::string& name)
+    s32 Add(s32 pool_id, s32 obj_size, u64 obj_vptr, s32 obj_count, const std::string& name)
     {
         if (pool_id < 0 || pool_id >= kLimitObjectCount)
         {
@@ -63,6 +63,7 @@ public:
 
         conf.obj_size_ = obj_size;
         conf.name_id_ = name_id;
+        conf.vptr_ = obj_vptr;
         conf.obj_count_ = obj_count;
         conf.space_size_ = zmem_pool::calculate_space_size(obj_size, obj_count);
         if (space_->max_used_id_ < pool_id)
@@ -87,7 +88,16 @@ public:
             name = zsymbols::readable_class_name<_Ty>();
         }
         s32 obj_size = (s32)sizeof(_Ty);
-        s32 ret = Add(pool_id, obj_size, obj_count, name);
+        u64 vptr = 0;
+        if (std::is_polymorphic<_Ty>::value)
+        {
+            _Ty* p = new _Ty();
+            vptr = *(u64*)p;
+            delete p;
+        }
+
+
+        s32 ret = Add(pool_id, obj_size, vptr, obj_count, name);
         if (ret != 0)
         {
             return ret;

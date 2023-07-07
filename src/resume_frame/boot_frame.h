@@ -50,21 +50,21 @@ private:
     static inline void DestroyObject(T* addr){addr->~T();}
 
 public:
-    static inline s32 BuildShm(bool isUseHeap);
-    static inline s32 ResumeShm(bool isUseHeap);
+    static inline s32 BuildShm(const std::string& options);
+    static inline s32 ResumeShm(const std::string& options);
     static inline s32 DoTick(s64 now_ms);
-    static inline s32 HoldShm(bool isUseHeap);
-    static inline s32 DestroyShm(bool isUseHeap, bool self, bool force);
+    static inline s32 HoldShm(const std::string& options);
+    static inline s32 DestroyShm(const std::string& options, bool self, bool force);
 };
 
 
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
+s32 FrameDelegate<Frame>::BuildShm(const std::string& options)
 {
     FrameConf conf;
-    s32 ret = Frame().Config(conf);
+    s32 ret = Frame().Config(options, conf);
     if (ret != 0)
     {
         LogError();
@@ -107,7 +107,7 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
             //rebuild pool in real SubSpace  addr  
             zmem_pool& pool = space->pools_[i];
             PoolConf& conf = space->conf_[i];
-            s32 ret = pool.init(conf.obj_size_, conf.name_id_, conf.obj_count_, (char*)space + offset, conf.space_size_);
+            s32 ret = pool.init(conf.obj_size_, conf.name_id_, conf.vptr_, conf.obj_count_, (char*)space + offset, conf.space_size_);
             if (ret != 0)
             {
                 LogError() << "";
@@ -159,10 +159,10 @@ s32 FrameDelegate<Frame>::BuildShm(bool isUseHeap)
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
+s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
 {
     FrameConf conf;
-    s32 ret = Frame().Config(conf);
+    s32 ret = Frame().Config(options, conf);
     if (ret != 0)
     {
         return ret;
@@ -212,6 +212,7 @@ s32 FrameDelegate<Frame>::ResumeShm(bool isUseHeap)
             {
                 continue;
             }
+            pool.resume();
             LogDebug() << "has pool " << space->symbols_.at(pool.name_id_) << pool;
         }
     }
@@ -258,15 +259,15 @@ s32 FrameDelegate<Frame>::DoTick(s64 now_ms)
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::HoldShm(bool isUseHeap)
+s32 FrameDelegate<Frame>::HoldShm(const std::string& options)
 {
-    if (isUseHeap)
+    if (options.find("heap") != std::string::npos)
     {
         LogError() << "";
         return -1;
     }
     FrameConf conf;
-    s32 ret = Frame().Config(conf);
+    s32 ret = Frame().Config(options, conf);
     if (ret != 0)
     {
         return ret;
@@ -286,7 +287,7 @@ s32 FrameDelegate<Frame>::HoldShm(bool isUseHeap)
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::DestroyShm(bool isUseHeap, bool self, bool force)
+s32 FrameDelegate<Frame>::DestroyShm(const std::string& options, bool self, bool force)
 {
     s32 ret = 0;
 
@@ -294,7 +295,7 @@ s32 FrameDelegate<Frame>::DestroyShm(bool isUseHeap, bool self, bool force)
     {
         if (force)
         {
-            s32 ret = HoldShm(isUseHeap);
+            s32 ret = HoldShm(options);
             if (ret != 0)
             {
                 LogError() << "";
@@ -303,7 +304,7 @@ s32 FrameDelegate<Frame>::DestroyShm(bool isUseHeap, bool self, bool force)
         }
         else
         {
-            s32 ret = ResumeShm(isUseHeap);
+            s32 ret = ResumeShm(options);
             if (ret != 0)
             {
                 LogError() << "";

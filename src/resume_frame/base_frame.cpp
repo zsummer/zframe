@@ -4,7 +4,7 @@
 zshm_space* g_shm_space = nullptr;
 
 
-s32 BaseFrame::Config(FrameConf& conf)
+s32 BaseFrame::Config(const std::string& options, FrameConf& conf)
 {
     memset(&conf, 0, sizeof(conf));
     conf.space_conf_.shm_key_ = 198709;
@@ -19,7 +19,7 @@ s32 BaseFrame::Config(FrameConf& conf)
 
     PoolHelper helper;
     helper.Attach(conf.pool_conf_, true);
-    s32 ret = helper.Add(23, 10, 100, "test");
+    s32 ret = helper.Add(23, 10, 0, 100, "test");
     if (ret != 0)
     {
         return ret;
