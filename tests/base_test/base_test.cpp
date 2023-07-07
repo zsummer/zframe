@@ -43,20 +43,16 @@ s32 UnitTick(void* unit, s64 now_ms)
 
 PoolForeachs<10> g_foreach;
 
-class MyServer : public BaseFrame
+class TestServer : public BaseFrame
 {
 public:
-    s32 Config(const std::string& options, FrameConf& conf)
+    s32 LoadConfig(const std::string& options, FrameConf& conf)
     {
-        s32 ret = BaseFrame::Config(options, conf);
+        s32 ret = BaseFrame::LoadConfig(options, conf);
         if (ret != 0)
         {
             return ret;
         }
-        conf.space_conf_.subs_[kMainFrame].size_ = SPACE_ALIGN(sizeof(MyServer));
-
-        conf.space_conf_.use_heap_ = options.find("heap") != std::string::npos;
-
 
         PoolHelper helper;
         helper.Attach(conf.pool_conf_, true);
@@ -66,7 +62,8 @@ public:
             return ret;
         }
 
-        conf.space_conf_.subs_[ShmSpace::kMainFrame].size_ = SPACE_ALIGN(sizeof(MyServer));
+        conf.space_conf_.use_heap_ = options.find("heap") != std::string::npos;
+        conf.space_conf_.subs_[ShmSpace::kMainFrame].size_ = SPACE_ALIGN(sizeof(TestServer));
         conf.space_conf_.subs_[ShmSpace::kPool].size_ = kPoolSpaceHeadSize + helper.TotalSpaceSize();
         conf.space_conf_.subs_[ShmSpace::kBuddy].size_ = SPACE_ALIGN(zbuddy::zbuddy_size(kHeapSpaceOrder));
         conf.space_conf_.subs_[ShmSpace::kMalloc].size_ = SPACE_ALIGN(zmalloc::zmalloc_size());
@@ -111,6 +108,9 @@ public:
         zmalloc::instance().free_memory(zmalloc::instance().alloc_memory(1000));
         zmalloc::instance().check_panic();
         LogInfo() << "MyServer Resume";
+        g_foreach.add(0, 0, 2, 10, 1000, UnitTick);
+        SubSpace<PoolSpace, kPool>()->pools_[0].create<Unit>();
+        SubSpace<PoolSpace, kPool>()->pools_[0].create<Unit>();
         return 0;
     }
     s32 Tick(s64 now_ms)
@@ -122,106 +122,27 @@ public:
 
 
 
-class StressServer : public BaseFrame
-{
-public:
-    s32 Config(const std::string& options, FrameConf& conf)
-    {
-        s32 ret = BaseFrame::Config(options, conf);
-        if (ret != 0)
-        {
-            return ret;
-        }
-        conf.space_conf_.subs_[kMainFrame].size_ = SPACE_ALIGN(sizeof(StressServer));
-        
-
-
-        return 0;
-    }
-
-    s32 Start()
-    {
-        s32 ret = BaseFrame::Start();
-        if (ret != 0)
-        {
-            LogError() << "error";
-            return -1;
-        }
-        LogInfo() << "MyServer Start";
-
-        zmalloc::instance().free_memory(zmalloc::instance().alloc_memory(1000));
-        zmalloc::instance().check_panic();
-
-        return 0;
-    }
-    s32 Resume()
-    {
-        s32 ret = BaseFrame::Resume();
-        if (ret != 0)
-        {
-            LogError() << "error";
-            return -1;
-        }
-        LogInfo() << "MyServer Resume";
-        zmalloc::instance().free_memory(zmalloc::instance().alloc_memory(1000));
-        zmalloc::instance().check_panic();
-
-
-        return 0;
-    }
-    s32 Tick(s64 now_ms)
-    {
-        return 0;
-    }
-};
-
-
 s32 boot_server(const std::string& option)
 {
 
-    if (option.find("stress") != std::string::npos)
+    if (option.find("start") != std::string::npos)
     {
-        if (option.find("start") != std::string::npos)
-        {
-            ASSERT_TEST(FrameDelegate<StressServer>::BuildShm(option) == 0);
-        }
-        if (option.find("stop") != std::string::npos)
-        {
-            ASSERT_TEST(FrameDelegate<StressServer>::DestroyShm(option, false, true) == 0);
-        }
-
-        if (option.find("resume") != std::string::npos)
-        {
-            ASSERT_TEST(FrameDelegate<StressServer>::ResumeShm(option) == 0);
-        }
-
-        if (option.find("hold") != std::string::npos)
-        {
-            ASSERT_TEST(FrameDelegate<StressServer>::HoldShm(option) == 0);
-        }
-
+        ASSERT_TEST(FrameDelegate<TestServer>::BuildShm(option) == 0);
     }
-    else
+
+    if (option.find("resume") != std::string::npos)
     {
-        if (option.find("start") != std::string::npos)
-        {
-            ASSERT_TEST(FrameDelegate<MyServer>::BuildShm(option) == 0);
-        }
-        if (option.find("stop") != std::string::npos)
-        {
-            ASSERT_TEST(FrameDelegate<MyServer>::DestroyShm(option, false, true) == 0);
-        }
+        ASSERT_TEST(FrameDelegate<TestServer>::ResumeShm(option) == 0);
+    }
 
-        if (option.find("resume") != std::string::npos)
-        {
-            ASSERT_TEST(FrameDelegate<MyServer>::ResumeShm(option) == 0);
-        }
+    if (option.find("exit") != std::string::npos)
+    {
+        ASSERT_TEST(FrameDelegate<TestServer>::ExitShm(option) == 0);
+    }
 
-        if (option.find("hold") != std::string::npos)
-        {
-            ASSERT_TEST(FrameDelegate<MyServer>::HoldShm(option) == 0);
-        }
-
+    if (option.find("del") != std::string::npos)
+    {
+        ASSERT_TEST(FrameDelegate<TestServer>::DelShm(option) == 0);
     }
 
     return 0;
@@ -249,23 +170,15 @@ int main(int argc, char *argv[])
 
     ASSERT_TEST(boot_server(option) == 0);
 
-    if (option.find("stress") != std::string::npos)
+
+    for (s32 i = 0; i < 300; i++)
     {
-        for (s32 i = 0; i < 100; i++)
-        {
-            FrameDelegate<StressServer>::DoTick(zclock::now_ms());
-            std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-        }
-    }
-    else
-    {
-        for (s32 i = 0; i < 300; i++)
-        {
-            FrameDelegate<MyServer>::DoTick(zclock::now_ms());
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
+        FrameDelegate<TestServer>::DoTick(zclock::now_ms());
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
+
+    ASSERT_TEST(boot_server("exit") == 0);
 
     LogInfo() << "all test finish .";
 

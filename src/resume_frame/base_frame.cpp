@@ -4,13 +4,14 @@
 zshm_space* g_shm_space = nullptr;
 
 
-s32 BaseFrame::Config(const std::string& options, FrameConf& conf)
+s32 BaseFrame::LoadConfig(const std::string& options, FrameConf& conf)
 {
     memset(&conf, 0, sizeof(conf));
     conf.space_conf_.shm_key_ = 198709;
     conf.space_conf_.use_heap_ = false;
 #ifdef WIN32
-
+    conf.space_conf_.use_fixed_ = 1;
+    conf.space_conf_.fixed_ = 0x0000070000000000ULL;
 #else
     conf.space_conf_.use_fixed_ = 1;
     conf.space_conf_.fixed_ = 0x00006AAAAAAAAAAAULL;

@@ -137,7 +137,7 @@ foreach(sub_dir_name ${sub_dirs})
     auto_target_include_files(${sub_dir_name} vender_files)
     auto_target_include_files(${sub_dir_name} src_files)
     auto_target_include_files(${sub_dir_name} test_sources)
-    target_precompile_headers(${sub_dir_name} PUBLIC  ${CMAKE_SOURCE_DIR}/src/resume_frame/frame_def.h)
+#    target_precompile_headers(${sub_dir_name} PUBLIC  ${CMAKE_SOURCE_DIR}/src/resume_frame/frame_def.h)
 
 
 

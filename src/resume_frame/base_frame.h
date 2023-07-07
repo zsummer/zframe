@@ -15,7 +15,7 @@
 class BaseFrame
 {
 public:
-    virtual s32 Config(const std::string& options, FrameConf& conf);
+    virtual s32 LoadConfig(const std::string& options, FrameConf& conf);
     virtual s32 Init();
     virtual s32 Resume();
 

@@ -52,9 +52,9 @@ private:
 public:
     static inline s32 BuildShm(const std::string& options);
     static inline s32 ResumeShm(const std::string& options);
+    static inline s32 ExitShm(const std::string& options); //正常退出并清理 
     static inline s32 DoTick(s64 now_ms);
-    static inline s32 HoldShm(const std::string& options);
-    static inline s32 DestroyShm(const std::string& options, bool self, bool force);
+    static inline s32 DelShm(const std::string& options);
 };
 
 
@@ -64,7 +64,7 @@ template <class Frame>
 s32 FrameDelegate<Frame>::BuildShm(const std::string& options)
 {
     FrameConf conf;
-    s32 ret = Frame().Config(options, conf);
+    s32 ret = Frame().LoadConfig(options, conf);
     if (ret != 0)
     {
         LogError();
@@ -162,7 +162,7 @@ template <class Frame>
 s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
 {
     FrameConf conf;
-    s32 ret = Frame().Config(options, conf);
+    s32 ret = Frame().LoadConfig(options, conf);
     if (ret != 0)
     {
         return ret;
@@ -180,7 +180,7 @@ s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
             return ret;
         }
         g_shm_space = shm_space;
-        ShmSpace().fixed_ = (u64)shm_space;
+        //ShmSpace().fixed_ = (u64)shm_space;
     }
 
 
@@ -196,6 +196,7 @@ s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
     if (true)
     {
         PoolSpace* space = SubSpace<PoolSpace, ShmSpace::kPool>();
+        //space->symbols_.attach(space->names_, kLimitObjectNameBuffSize, kLimitObjectNameBuffSize);
         PoolHelper helper;
         s32 ret = helper.Attach(conf.pool_conf_, false);
         if (helper.Diff(space) != 0)
@@ -256,78 +257,45 @@ s32 FrameDelegate<Frame>::DoTick(s64 now_ms)
 }
 
 
-
-
 template <class Frame>
-s32 FrameDelegate<Frame>::HoldShm(const std::string& options)
+s32 FrameDelegate<Frame>::ExitShm(const std::string& options)
 {
-    if (options.find("heap") != std::string::npos)
-    {
-        LogError() << "";
-        return -1;
-    }
-    FrameConf conf;
-    s32 ret = Frame().Config(options, conf);
-    if (ret != 0)
-    {
-        return ret;
-    }
-
-    zshm_boot booter;
-    zshm_space* shm_space = nullptr;
-    ret = booter.resume_frame(conf.space_conf_, shm_space);
-    if (ret != 0 || shm_space == nullptr)
-    {
-        LogError() << "";
-        return ret;
-    }
-    g_shm_space = shm_space;
-    return 0;
-}
-
-
-template <class Frame>
-s32 FrameDelegate<Frame>::DestroyShm(const std::string& options, bool self, bool force)
-{
-    s32 ret = 0;
-
-    if (!self)
-    {
-        if (force)
-        {
-            s32 ret = HoldShm(options);
-            if (ret != 0)
-            {
-                LogError() << "";
-                return ret;
-            }
-        }
-        else
-        {
-            s32 ret = ResumeShm(options);
-            if (ret != 0)
-            {
-                LogError() << "";
-                return ret;
-            }
-        }
-    }
-
     if (g_shm_space == nullptr)
     {
         LogError() << "";
         return -1;
     }
 
-    if (!force)
-    {
-        DestroyObject(SubSpace<Frame, ShmSpace::kMainFrame>());
-    }
+    DestroyObject(SubSpace<Frame, ShmSpace::kMainFrame>());
 
-    ret = zshm_boot::destroy_frame(ShmSpace());
+    s32 ret = zshm_boot::destroy_frame(ShmSpace());
     if (ret != 0)
     {
         LogError() << "";
+        return ret;
+    }
+    return 0;
+}
+
+
+
+template <class Frame>
+s32 FrameDelegate<Frame>::DelShm(const std::string& options)
+{
+    s32 ret = 0;
+    FrameConf conf;
+    ret = Frame().LoadConfig(options, conf);
+    if (ret != 0)
+    {
+        LogError() << "Destroy shm has error: load config error ";
+        return ret;
+    }
+
+    zshm_boot booter;
+    ret = booter.destroy_frame(conf.space_conf_);
+    if (ret != 0)
+    {
+        LogError() << "Destroy shm has error:" << zshm_errno::str(ret) <<", please used ipcs -m/ ipcrm -m to destroy it. ";
         return ret;
     }
     return 0;
