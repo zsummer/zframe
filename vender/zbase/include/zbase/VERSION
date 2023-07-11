@@ -1,6 +1,6 @@
 version:
-last_sha1(./src)=6934c1674a8c9aae86a07366085532e854755269
-last_date(./src)=2023-07-07 21:08:18 +0800
+last_sha1(./src)=df5f4f09a2438174410f40d720a04f36697afb7f
+last_date(./src)=2023-07-11 16:06:47 +0800
 
 git log -1 --stat ./src:
-commit 6934c1674a8c9aae86a07366085532e854755269 Author: zsummer <yawei.zhang@foxmail.com> Date: Fri Jul 7 21:07:47 2023 +0800 zshm_ptr used std::call_once; src/include/zshm_ptr.h | 7 +++---- 1 file changed, 3 insertions(+), 4 deletions(-)
+commit df5f4f09a2438174410f40d720a04f36697afb7f Author: zsummer <yawei.zhang@foxmail.com> Date: Tue Jul 11 16:06:47 2023 +0800 clean code src/include/zfile_mapping.h | 8 ++++---- src/include/zstream.h | 41 ++++++++++++++++++++++++++++++++++++++--- 2 files changed, 42 insertions(+), 7 deletions(-)
