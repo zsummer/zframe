@@ -7,7 +7,7 @@
 
 
 //#include "frame_def.h"
-#include "boot_frame.h"
+#include "frame_boot.h"
 #include "test_common.h"
 #include "ztest.h"
 #include "pool_foreach.h"
@@ -128,22 +128,22 @@ s32 boot_server(const std::string& option)
 
     if (option.find("start") != std::string::npos)
     {
-        ASSERT_TEST(FrameDelegate<TestServer>::BuildShm(option) == 0);
+        ASSERT_TEST(FrameBoot<TestServer>::BuildShm(option) == 0);
     }
 
     if (option.find("resume") != std::string::npos)
     {
-        ASSERT_TEST(FrameDelegate<TestServer>::ResumeShm(option) == 0);
+        ASSERT_TEST(FrameBoot<TestServer>::ResumeShm(option) == 0);
     }
 
     if (option.find("exit") != std::string::npos)
     {
-        ASSERT_TEST(FrameDelegate<TestServer>::ExitShm(option) == 0);
+        ASSERT_TEST(FrameBoot<TestServer>::ExitShm(option) == 0);
     }
 
     if (option.find("del") != std::string::npos)
     {
-        ASSERT_TEST(FrameDelegate<TestServer>::DelShm(option) == 0);
+        ASSERT_TEST(FrameBoot<TestServer>::DelShm(option) == 0);
     }
 
     return 0;
@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
     {
         for (s32 i = 0; i < 300; i++)
         {
-            FrameDelegate<TestServer>::DoTick(zclock::now_ms());
+            FrameBoot<TestServer>::DoTick(zclock::now_ms());
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         ASSERT_TEST(boot_server("exit") == 0);

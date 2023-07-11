@@ -6,8 +6,8 @@
 */
 
 
-#ifndef  BOOT_FRAME_H_
-#define BOOT_FRAME_H_
+#ifndef  FRAME_BOOT_H_
+#define FRAME_BOOT_H_
 
 #include "frame_def.h"
 #include "base_frame.h"
@@ -16,7 +16,7 @@
 
 template <class Frame>  //derive from BaseFrame  
 //requires std::is_base_of<BaseFrame, Frame>::value
-class FrameDelegate
+class FrameBoot
 {
 private:
     static_assert(std::is_base_of<BaseFrame, Frame>::value, "need base of BaseFrame");
@@ -60,7 +60,7 @@ public:
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::BuildShm(const std::string& options)
+s32 FrameBoot<Frame>::BuildShm(const std::string& options)
 {
     FrameConf conf;
     s32 ret = Frame::LoadConfig(options, conf);
@@ -161,7 +161,7 @@ s32 FrameDelegate<Frame>::BuildShm(const std::string& options)
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
+s32 FrameBoot<Frame>::ResumeShm(const std::string& options)
 {
     FrameConf conf;
     s32 ret = Frame::LoadConfig(options, conf);
@@ -253,14 +253,14 @@ s32 FrameDelegate<Frame>::ResumeShm(const std::string& options)
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::DoTick(s64 now_ms)
+s32 FrameBoot<Frame>::DoTick(s64 now_ms)
 {
     return SubSpace<Frame, kMainFrame>()->Tick(now_ms);
 }
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::ExitShm(const std::string& options)
+s32 FrameBoot<Frame>::ExitShm(const std::string& options)
 {
     if (g_shm_space == nullptr)
     {
@@ -282,7 +282,7 @@ s32 FrameDelegate<Frame>::ExitShm(const std::string& options)
 
 
 template <class Frame>
-s32 FrameDelegate<Frame>::DelShm(const std::string& options)
+s32 FrameBoot<Frame>::DelShm(const std::string& options)
 {
     s32 ret = 0;
     FrameConf conf;
